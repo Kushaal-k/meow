@@ -30,9 +30,12 @@ process.on('unhandledRejection', (reason) => {
 // Configure Windows PATH for native sharp & libvips DLL dependencies
 if (process.platform === 'win32') {
     const candidates = [
-        path.join(process.cwd(), 'node_modules', '@img', 'sharp-win32-x64', 'lib'),
         path.join(__dirname, 'node_modules', '@img', 'sharp-win32-x64', 'lib'),
+        path.join(__dirname, 'node_modules', '@img', 'sharp-libvips-win32-x64', 'lib'),
+        path.join(process.cwd(), 'node_modules', '@img', 'sharp-win32-x64', 'lib'),
+        path.join(process.cwd(), 'node_modules', '@img', 'sharp-libvips-win32-x64', 'lib'),
         process.resourcesPath ? path.join(process.resourcesPath, 'app', 'node_modules', '@img', 'sharp-win32-x64', 'lib') : null,
+        process.resourcesPath ? path.join(process.resourcesPath, 'app', 'node_modules', '@img', 'sharp-libvips-win32-x64', 'lib') : null,
         process.resourcesPath ? path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', '@img', 'sharp-win32-x64', 'lib') : null,
         process.resourcesPath ? path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', '@img', 'sharp-libvips-win32-x64', 'lib') : null
     ].filter(Boolean);
@@ -138,7 +141,13 @@ function buildApplicationMenu() {
 }
 
 function createWindow(port) {
-    const iconPath = path.join(__dirname, 'assets', 'app-icon.png');
+    const iconCandidates = [
+        process.platform === 'win32' ? path.join(__dirname, 'assets', 'icon.ico') : null,
+        path.join(__dirname, 'assets', 'app-icon.png'),
+        path.join(__dirname, 'assets', 'icon.png')
+    ].filter(Boolean);
+
+    const iconPath = iconCandidates.find(p => fs.existsSync(p));
 
     mainWindow = new BrowserWindow({
         width: 1240,
@@ -148,7 +157,7 @@ function createWindow(port) {
         title: 'AI Badge Studio',
         backgroundColor: '#0a100d',
         show: false,
-        icon: fs.existsSync(iconPath) ? iconPath : undefined,
+        icon: iconPath,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: false,

@@ -222,7 +222,7 @@ async function processImage(inputPath, outputPath) {
         .png()
         .toBuffer();
 
-    const rightMargin = Math.round(metadata.width * 0.01);
+    const rightMargin = -Math.round(metadata.width * 0.015);
     const bottomMargin = -Math.round(metadata.height * 0.05);
 
     const badgeMetadata = await sharp(badgeBuffer).metadata();

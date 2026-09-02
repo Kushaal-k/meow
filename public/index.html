@@ -13,9 +13,24 @@
     <title>AI Badge Studio</title>
 
     <link
+        rel="icon"
+        type="image/png"
+        href="/assets/app-icon.png"
+    >
+
+    <link
         rel="stylesheet"
         href="style.css"
     >
+
+    <script>
+        (function () {
+            const savedTheme = localStorage.getItem('ai_badge_studio_theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = savedTheme || (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
 
 </head>
 
@@ -33,17 +48,46 @@
                     alt="AI Badge Studio"
                 >
             </div>
-            
-            
 
         </div>
 
-        <div class="status">
+        <div class="header-actions">
 
-            <img
-            src="/assets/BadgeProcessing.png"
-            alt="Processing"
+            <button
+                id="themeToggleBtn"
+                class="theme-toggle-btn"
+                type="button"
+                aria-label="Toggle dark mode"
+                title="Toggle Dark / Light Mode"
             >
+                <span class="theme-icon-wrapper">
+                    <!-- Sun Icon (shown in dark mode) -->
+                    <svg class="theme-icon theme-icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                    <!-- Moon Icon (shown in light mode) -->
+                    <svg class="theme-icon theme-icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </span>
+            </button>
+
+            <div class="status">
+
+                <img
+                    src="/assets/BadgeProcessing.png"
+                    alt="Processing"
+                >
+
+            </div>
 
         </div>
 
@@ -170,6 +214,9 @@
 
             </div>
 
+            <div id="layoutResizer" class="layout-resizer" title="Drag to resize panel (Double-click to reset)">
+                <div class="resizer-handle"></div>
+            </div>
 
             <div
                 id="panelRight"
@@ -234,6 +281,37 @@
 
                     </div>
 
+                    <!-- Single Image Result Preview Panel -->
+                    <div id="singleResultPanel" class="single-result-panel hidden">
+
+                        <div class="single-preview-card">
+
+                            <div class="single-preview-media" id="singlePreviewTrigger">
+
+                                <img
+                                    id="singlePreviewImg"
+                                    class="single-preview-img"
+                                    src=""
+                                    alt="Processed AI Badged Preview"
+                                >
+
+                                <div class="single-preview-overlay">
+                                    <span class="preview-badge-tag">✦ AI Badge Applied</span>
+                                    <span class="preview-hint-tag">Click to expand</span>
+                                </div>
+
+                            </div>
+
+                            <div class="single-preview-details">
+                                <div id="singleFileName" class="single-file-name"></div>
+                                <div id="singleFileMeta" class="single-file-meta">Processed successfully</div>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <!-- Multiple Images Result Panel -->
                     <div id="resultsPanel" class="results-panel hidden">
 
                        <div class="results-header">
@@ -309,6 +387,23 @@
 
     </footer>
 
+</div>
+
+<!-- Fullscreen Image Preview Lightbox Modal -->
+<div id="previewModal" class="preview-modal hidden">
+    <div class="modal-backdrop" id="modalBackdrop"></div>
+    <div class="modal-dialog">
+        <div class="modal-header">
+            <span id="modalFileName" class="modal-file-name"></span>
+            <div class="modal-actions">
+                <a id="modalDownloadBtn" class="modal-download-btn" href="#" download>↓ Download</a>
+                <button type="button" id="modalCloseBtn" class="modal-close-btn" title="Close">×</button>
+            </div>
+        </div>
+        <div class="modal-body">
+            <img id="modalImg" class="modal-img" src="" alt="Full Preview">
+        </div>
+    </div>
 </div>
 
 <script src="app.js"></script>

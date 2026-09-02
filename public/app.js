@@ -61,6 +61,75 @@ const downloadSelectedButton =
 const viewToggle =
     document.getElementById('viewToggle');
 
+const singleResultPanel =
+    document.getElementById('singleResultPanel');
+
+const singlePreviewImg =
+    document.getElementById('singlePreviewImg');
+
+const singlePreviewTrigger =
+    document.getElementById('singlePreviewTrigger');
+
+const singleFileName =
+    document.getElementById('singleFileName');
+
+const singleFileMeta =
+    document.getElementById('singleFileMeta');
+
+const previewModal =
+    document.getElementById('previewModal');
+
+const modalBackdrop =
+    document.getElementById('modalBackdrop');
+
+const modalCloseBtn =
+    document.getElementById('modalCloseBtn');
+
+const modalFileName =
+    document.getElementById('modalFileName');
+
+const modalDownloadBtn =
+    document.getElementById('modalDownloadBtn');
+
+const themeToggleBtn =
+    document.getElementById('themeToggleBtn');
+
+// ============================================================
+// THEME MANAGEMENT (DARK / LIGHT MODE)
+// ============================================================
+
+function getPreferredTheme() {
+    const stored = localStorage.getItem('ai_badge_studio_theme');
+    if (stored) return stored;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('ai_badge_studio_theme', theme);
+    if (themeToggleBtn) {
+        const isDark = theme === 'dark';
+        themeToggleBtn.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+        themeToggleBtn.setAttribute('title', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+    }
+}
+
+if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', () => {
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        applyTheme(nextTheme);
+    });
+}
+
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    if (!localStorage.getItem('ai_badge_studio_theme')) {
+        applyTheme(e.matches ? 'dark' : 'light');
+    }
+});
+
+applyTheme(document.documentElement.getAttribute('data-theme') || getPreferredTheme());
+
 let selectedFiles = [];
 
 const supportedExtensions = [
@@ -118,8 +187,79 @@ function formatSize(bytes) {
 
 
 // ============================================================
-// LAYOUT STATE HELPERS
+// PANEL RESIZER LOGIC
 // ============================================================
+
+const layoutResizer = document.getElementById('layoutResizer');
+
+function getPanelBounds() {
+    const minW = Math.round(window.innerWidth * 0.20);
+    const maxW = Math.round(window.innerWidth * 0.50);
+    return { minW, maxW };
+}
+
+function setPanelWidth(width) {
+    const { minW, maxW } = getPanelBounds();
+    const clampedWidth = Math.round(Math.min(Math.max(width, minW), maxW));
+
+    layout.style.setProperty('--left-panel-width', `${clampedWidth}px`);
+    localStorage.setItem('ai_badge_studio_panel_width', clampedWidth);
+}
+
+function initPanelResizer() {
+    const { minW, maxW } = getPanelBounds();
+    const defaultWidth = Math.round(window.innerWidth * 0.30);
+    const savedWidth = parseInt(localStorage.getItem('ai_badge_studio_panel_width'), 10);
+
+    if (savedWidth && !isNaN(savedWidth) && savedWidth >= minW && savedWidth <= maxW) {
+        setPanelWidth(savedWidth);
+    } else {
+        setPanelWidth(defaultWidth);
+    }
+
+    if (!layoutResizer) return;
+
+    let isDragging = false;
+
+    function onPointerDown(e) {
+        if (!layout.classList.contains('split')) return;
+        isDragging = true;
+        layoutResizer.classList.add('is-dragging');
+        document.body.classList.add('is-resizing');
+        e.preventDefault();
+    }
+
+    function onPointerMove(e) {
+        if (!isDragging) return;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const layoutRect = layout.getBoundingClientRect();
+        const newWidth = clientX - layoutRect.left;
+        setPanelWidth(newWidth);
+    }
+
+    function onPointerUp() {
+        if (!isDragging) return;
+        isDragging = false;
+        layoutResizer.classList.remove('is-dragging');
+        document.body.classList.remove('is-resizing');
+    }
+
+    layoutResizer.addEventListener('mousedown', onPointerDown);
+    layoutResizer.addEventListener('touchstart', onPointerDown, { passive: false });
+
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('touchmove', onPointerMove, { passive: false });
+
+    window.addEventListener('mouseup', onPointerUp);
+    window.addEventListener('touchend', onPointerUp);
+
+    // Double click to reset to default 30% width
+    layoutResizer.addEventListener('dblclick', () => {
+        setPanelWidth(Math.round(window.innerWidth * 0.30));
+    });
+}
+
+initPanelResizer();
 
 function setSplit(isSplit) {
 
@@ -129,6 +269,11 @@ function setSplit(isSplit) {
         panelRight.classList.remove('hidden');
         document.querySelector('.hero').classList.add('hidden');
         document.querySelector('.main').classList.add('compact');
+
+        const savedWidth = parseInt(localStorage.getItem('ai_badge_studio_panel_width'), 10);
+        if (savedWidth && !isNaN(savedWidth)) {
+            setPanelWidth(savedWidth);
+        }
 
     } else {
 
@@ -390,12 +535,49 @@ viewToggle.addEventListener('click', event => {
 
 
 // ============================================================
+// MODAL LIGHTBOX HELPERS
+// ============================================================
+
+function openModal(file) {
+    if (!file) return;
+
+    modalFileName.textContent = file.name || 'Image Preview';
+    modalImg.src = file.previewUrl || file.url;
+    modalDownloadBtn.href = file.url || file.previewUrl;
+    modalDownloadBtn.download = file.name || 'image.png';
+
+    previewModal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+    previewModal.classList.add('hidden');
+    modalImg.src = '';
+    document.body.style.overflow = '';
+}
+
+if (modalCloseBtn) {
+    modalCloseBtn.addEventListener('click', closeModal);
+}
+
+if (modalBackdrop) {
+    modalBackdrop.addEventListener('click', closeModal);
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && previewModal && !previewModal.classList.contains('hidden')) {
+        closeModal();
+    }
+});
+
+
+// ============================================================
 // RESULTS RENDERING
 // ============================================================
 
 function renderResults(result) {
 
-   resultsList.classList.remove('row-view');
+    resultsList.classList.remove('row-view');
     currentView = 'card';
 
     viewToggle
@@ -409,8 +591,7 @@ function renderResults(result) {
     const files = result.files || [];
 
     /*
-     * Single file: just show the plain
-     * download button, skip the list.
+     * Single file: Show dedicated high-res preview card
      */
     if (files.length <= 1) {
 
@@ -418,16 +599,28 @@ function renderResults(result) {
 
         if (files.length === 1) {
 
+            const singleFile = files[0];
+
+            singleResultPanel.classList.remove('hidden');
+            singlePreviewImg.src = singleFile.previewUrl || singleFile.url;
+            singleFileName.textContent = singleFile.name;
+            singleFileMeta.textContent = 'Intelligent AI Badge successfully embedded';
+
+            singlePreviewTrigger.onclick = () => {
+                openModal(singleFile);
+            };
+
             downloadButton.href =
-                files[0].url;
+                singleFile.url;
 
             downloadButton.textContent =
-                `↓  Download ${files[0].name}`;
+                `↓  Download ${singleFile.name}`;
 
             downloadButton.classList.remove('hidden');
 
         } else {
 
+            singleResultPanel.classList.add('hidden');
             downloadButton.classList.add('hidden');
         }
 
@@ -440,6 +633,7 @@ function renderResults(result) {
      * plus the "download all" zip button.
      */
 
+    singleResultPanel.classList.add('hidden');
     resultsPanel.classList.remove('hidden');
 
     selectAllCheckbox.checked = false;
@@ -455,8 +649,14 @@ function renderResults(result) {
             document.createElement('img');
 
         thumb.className = 'result-thumb';
-        thumb.src = file.url;
+        thumb.src = file.previewUrl || file.url;
         thumb.alt = file.name;
+        thumb.title = 'Click to preview full size';
+
+        thumb.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openModal(file);
+        });
 
         const checkbox =
             document.createElement('input');
@@ -484,6 +684,12 @@ function renderResults(result) {
         row.appendChild(checkbox);
         row.appendChild(name);
         row.appendChild(link);
+
+        row.addEventListener('click', (e) => {
+            if (e.target !== checkbox && e.target !== link && e.target !== thumb) {
+                openModal(file);
+            }
+        });
 
         resultsList.appendChild(row);
     });
@@ -672,6 +878,8 @@ againButton.onclick = () => {
 
     progressBar.style.width = '0%';
 
+    singleResultPanel.classList.add('hidden');
     resultsPanel.classList.add('hidden');
     downloadButton.classList.remove('hidden');
+    closeModal();
 };

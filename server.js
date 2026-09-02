@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const archiver = require('archiver');
 const unzipper = require('unzipper');
+const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -787,7 +788,10 @@ app.post(
                                 result.results[0].name,
 
                             url:
-                                `/api/download/${jobId}/0`
+                                `/api/download/${jobId}/0`,
+
+                            previewUrl:
+                                `/api/preview/${jobId}/0`
                         }
                     ]
                 });
@@ -840,7 +844,9 @@ app.post(
                             id: index,
                             name: item.name,
                             url:
-                                `/api/download/${jobId}/${index}`
+                                `/api/download/${jobId}/${index}`,
+                            previewUrl:
+                                `/api/preview/${jobId}/${index}`
                         })
                     ),
 
@@ -870,6 +876,65 @@ app.post(
                     'Image processing failed.'
             });
         }
+    }
+);
+
+
+// ============================================================
+// PREVIEW / INLINE IMAGE VIEW
+// ============================================================
+
+app.get(
+    '/api/preview/:jobId/:file',
+    (req, res) => {
+
+        const {
+            jobId,
+            file
+        } = req.params;
+
+        const job =
+            resultsStore.get(
+                jobId
+            );
+
+        if (!job) {
+
+            return res.status(404).send(
+                'Processing result not found.'
+            );
+        }
+
+        const index =
+            Number(file);
+
+        if (
+            Number.isNaN(index) ||
+            index < 0 ||
+            index >= job.results.length
+        ) {
+
+            return res.status(404).send(
+                'File not found.'
+            );
+        }
+
+        const result =
+            job.results[index];
+
+        if (
+            !result ||
+            !fs.existsSync(result.path)
+        ) {
+
+            return res.status(404).send(
+                'File no longer exists.'
+            );
+        }
+
+        return res.sendFile(
+            result.path
+        );
     }
 );
 
@@ -969,9 +1034,20 @@ app.get(
 function startServer(preferredPort = PORT, host = '127.0.0.1') {
     return new Promise((resolve, reject) => {
         const tryListen = (portToTry) => {
-            const server = app.listen(portToTry, host, () => {
+            const server = http.createServer(app);
+
+            server.on('error', (err) => {
+                if (err.code === 'EADDRINUSE' && portToTry !== 0) {
+                    console.warn(`Port ${portToTry} is in use. Trying random available port...`);
+                    tryListen(0);
+                } else {
+                    reject(err);
+                }
+            });
+
+            server.listen(portToTry, host, () => {
                 const address = server.address();
-                const actualPort = address.port;
+                const actualPort = (address && typeof address === 'object') ? address.port : portToTry;
                 console.log('');
                 console.log('====================================');
                 console.log('          AI BADGE STUDIO');
@@ -987,15 +1063,6 @@ function startServer(preferredPort = PORT, host = '127.0.0.1') {
                     host,
                     stopServer: () => new Promise((res) => server.close(res))
                 });
-            });
-
-            server.on('error', (err) => {
-                if (err.code === 'EADDRINUSE' && portToTry !== 0) {
-                    console.warn(`Port ${portToTry} is in use. Trying random available port...`);
-                    tryListen(0);
-                } else {
-                    reject(err);
-                }
             });
         };
 
