@@ -41,6 +41,11 @@
   "build": {
     "appId": "com.aibadgestudio.app",
     "productName": "AI Badge Studio",
+    "compression": "normal",
+    "electronLanguages": [
+      "en-US",
+      "en"
+    ],
     "directories": {
       "output": "dist"
     },
@@ -58,8 +63,8 @@
       "!node_modules/app-builder-bin/**/*",
       "!node_modules/@electron/rebuild/**/*",
       "!node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
-      "!node_modules/*/{test,__tests__,tests,example,examples}",
-      "!node_modules/*.d.ts",
+      "!node_modules/*/{test,__tests__,tests,example,examples,docs,doc}",
+      "!node_modules/**/*.{d.ts,map,md}",
       "!node_modules/.bin"
     ],
     "extraResources": [
@@ -71,7 +76,11 @@
         ]
       }
     ],
-    "asar": false,
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/@img/**/*",
+      "**/node_modules/sharp/**/*"
+    ],
     "win": {
       "target": [
         {
@@ -86,6 +95,12 @@
             "x64"
           ]
         }
+      ],
+      "files": [
+        "!node_modules/@img/sharp-darwin-*/**/*",
+        "!node_modules/@img/sharp-libvips-darwin-*/**/*",
+        "!node_modules/@img/sharp-linux-*/**/*",
+        "!node_modules/@img/sharp-libvips-linux-*/**/*"
       ],
       "icon": "assets/icon.ico",
       "signAndEditExecutable": false
@@ -113,6 +128,12 @@
             "arm64"
           ]
         }
+      ],
+      "files": [
+        "!node_modules/@img/sharp-win32-*/**/*",
+        "!node_modules/@img/sharp-libvips-win32-*/**/*",
+        "!node_modules/@img/sharp-linux-*/**/*",
+        "!node_modules/@img/sharp-libvips-linux-*/**/*"
       ],
       "icon": "assets/icon.icns",
       "category": "public.app-category.graphics-design",
