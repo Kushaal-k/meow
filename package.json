@@ -1,0 +1,23 @@
+{
+  "name": "ai-badge-node-js-worker",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:exe": "pkg server.js --targets node20-win-x64 --output dist/AIBadgeStudio.exe"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "express": "^5.2.1",
+    "multer": "^2.2.0",
+    "sharp": "^0.35.3",
+    "unzipper": "^0.12.5"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.14.2"
+  }
+}

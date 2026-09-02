@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>AI Badge Studio</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+
+</head>
+
+<body>
+
+<div class="app">
+
+    <header class="header">
+
+        <div class="brand">
+
+            <div class="brand-icon">
+                <img
+                    src="/assets/icon.png"
+                    alt="AI Badge Studio"
+                >
+            </div>
+            
+            
+
+        </div>
+
+        <div class="status">
+
+            <img
+            src="/assets/BadgeProcessing.png"
+            alt="Processing"
+            >
+
+        </div>
+
+    </header>
+
+
+    <main class="main">
+
+        <section class="hero">
+
+            <div class="eyebrow">
+                AI IMAGE PROCESSING
+            </div>
+
+            <h1>
+                Add the right AI badge<br>
+                to your images.
+            </h1>
+
+            <p>
+                Upload individual images or an entire ZIP.
+                Your existing image intelligence will automatically
+                select and apply the appropriate badge.
+            </p>
+
+        </section>
+
+
+        <div id="layout" class="layout">
+
+            <div class="panel-left">
+
+                <section
+                    id="dropZone"
+                    class="drop-zone"
+                >
+
+                    <div class="upload-icon">
+                        ↑
+                    </div>
+
+                    <h2>
+                        Drop your files here
+                    </h2>
+
+                    <p>
+                        Images or a ZIP containing images
+                    </p>
+
+                    <label
+                        for="fileInput"
+                        class="browse-button"
+                    >
+                        Browse Files
+                    </label>
+
+                    <input
+                        id="fileInput"
+                        type="file"
+                        multiple
+                        accept=".jpg,.jpeg,.png,.webp,.zip"
+                        hidden
+                    >
+
+                    <div class="formats">
+                        JPG · JPEG · PNG · WEBP · ZIP
+                    </div>
+
+                </section>
+
+
+                <section
+                    id="filesSection"
+                    class="files-section hidden"
+                >
+
+                    <div class="section-header">
+
+                        <div>
+
+                            <div class="section-title">
+                                YOUR FILES
+                            </div>
+
+                            <div
+                                id="fileCount"
+                                class="section-subtitle"
+                            >
+                                0 files selected
+                            </div>
+
+                        </div>
+
+                        <button
+                            id="clearButton"
+                            class="text-button"
+                        >
+                            Clear all
+                        </button>
+
+                    </div>
+
+
+                    <div
+                        id="fileGrid"
+                        class="file-grid"
+                    ></div>
+
+
+                    <button
+                        id="processButton"
+                        class="process-button"
+                    >
+
+                        <span>
+                           ✦
+                        </span>
+
+                        Generate AI Badges
+
+                    </button>
+
+                </section>
+
+            </div>
+
+
+            <div
+                id="panelRight"
+                class="panel-right hidden"
+            >
+
+                <div
+                    id="processingState"
+                    class="panel-processing hidden"
+                >
+
+                    <div class="processing-icon">
+                       <img
+                            src="/assets/electric_green_bg_badge.png"
+                            alt="Processing"
+                        >
+                    </div>
+
+                    <h2>
+                        Processing your images
+                    </h2>
+
+                    <p>
+                        Adding intelligent AI badges
+                    </p>
+
+                    <div class="progress-container">
+
+                        <div
+                            id="progressBar"
+                            class="progress-bar"
+                        ></div>
+
+                    </div>
+
+                    <div
+                        id="progressText"
+                        class="progress-text"
+                    >
+                        Processing...
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="resultsState"
+                    class="panel-results hidden"
+                >
+
+                    <div class="results-top">
+
+                        <div class="success-icon">✓</div>
+
+                        <div class="eyebrow">COMPLETE</div>
+
+                        <h2>All done.</h2>
+
+                        <p id="successText">
+                            Your images have been processed successfully.
+                        </p>
+
+                    </div>
+
+                    <div id="resultsPanel" class="results-panel hidden">
+
+                       <div class="results-header">
+
+                            <label class="select-all-label">
+                                <input type="checkbox" id="selectAllCheckbox">
+                                Select all
+                            </label>
+
+                            <div class="results-header-right">
+
+                                <div class="view-toggle" id="viewToggle">
+                                    <button type="button" class="view-toggle-btn active" data-view="card">
+                                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="3" y="3" width="7" height="7"></rect>
+                                            <rect x="14" y="3" width="7" height="7"></rect>
+                                            <rect x="14" y="14" width="7" height="7"></rect>
+                                            <rect x="3" y="14" width="7" height="7"></rect>
+                                        </svg>
+                                    </button>
+                                    <button type="button" class="view-toggle-btn" data-view="row">
+                                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <line x1="8" y1="6" x2="21" y2="6"></line>
+                                            <line x1="8" y1="12" x2="21" y2="12"></line>
+                                            <line x1="8" y1="18" x2="21" y2="18"></line>
+                                            <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                                            <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                                            <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                                        </svg>
+                                    </button>
+                                </div>
+
+                                <button id="downloadSelectedButton" class="text-button">
+                                    Download selected
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                        <div id="resultsList" class="results-list"></div>
+
+                    </div>
+                    <a
+                        id="downloadButton"
+                        class="download-button"
+                    >
+                        ↓ &nbsp; Download AI-Badged ZIP
+                    </a>
+
+                    <button id="againButton" class="again-button">
+                        Process more images
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+
+    <footer>
+
+        <span>
+            AI Badge Studio
+        </span>
+
+        <span>
+            Processing happens locally on this machine
+        </span>
+
+    </footer>
+
+</div>
+
+<script src="app.js"></script>
+
+</body>
+
+</html>
