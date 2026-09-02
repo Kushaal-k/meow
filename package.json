@@ -1,23 +1,138 @@
 {
-  "name": "ai-badge-node-js-worker",
+  "name": "ai-badge-studio",
   "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build:exe": "pkg server.js --targets node20-win-x64 --output dist/AIBadgeStudio.exe"
-  },
-  "keywords": [],
+  "description": "Intelligent AI Badge watermarking & processing application",
+  "main": "main.js",
   "author": "",
   "license": "ISC",
-  "description": "",
+  "scripts": {
+    "start": "electron .",
+    "server": "node server.js",
+    "build:win": "electron-builder --win --x64",
+    "build:win:installer": "electron-builder --win --x64 -c.win.target=nsis",
+    "build:mac": "electron-builder --mac",
+    "build:mac:dmg": "electron-builder --mac -c.mac.target=dmg",
+    "build:all": "npm run build:win && npm run build:mac",
+    "pack": "electron-builder --dir"
+  },
   "dependencies": {
     "archiver": "^7.0.1",
+    "archiver-utils": "^5.0.2",
     "express": "^5.2.1",
     "multer": "^2.2.0",
     "sharp": "^0.35.3",
-    "unzipper": "^0.12.5"
+    "unzipper": "^0.12.5",
+    "zip-stream": "^6.0.1"
+  },
+  "optionalDependencies": {
+    "@img/sharp-darwin-arm64": "^0.35.3",
+    "@img/sharp-darwin-x64": "^0.35.3",
+    "@img/sharp-libvips-darwin-arm64": "^1.3.2",
+    "@img/sharp-libvips-darwin-x64": "^1.3.2",
+    "@img/sharp-libvips-linux-x64": "^1.3.2",
+    "@img/sharp-linux-x64": "^0.35.3",
+    "@img/sharp-win32-x64": "^0.35.3"
   },
   "devDependencies": {
-    "@yao-pkg/pkg": "^6.14.2"
+    "electron": "^34.3.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.aibadgestudio.app",
+    "productName": "AI Badge Studio",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "server.js",
+      "src/**/*",
+      "public/**/*",
+      "assets/**/*",
+      "package.json",
+      "node_modules/**/*",
+      "!node_modules/electron/**/*",
+      "!node_modules/electron-builder/**/*",
+      "!node_modules/app-builder-bin/**/*",
+      "!node_modules/@electron/rebuild/**/*",
+      "!node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!node_modules/*/{test,__tests__,tests,example,examples}",
+      "!node_modules/*.d.ts",
+      "!node_modules/.bin"
+    ],
+    "extraResources": [
+      {
+        "from": "assets",
+        "to": "assets",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asar": false,
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AI Badge Studio"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "dir",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.graphics-design",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "AI Badge Studio",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
   }
 }

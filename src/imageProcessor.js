@@ -1,4 +1,6 @@
 const sharp = require('sharp');
+const path = require('path');
+const fs = require('fs');
 
 const COLOR_REFERENCES = {
     darkGreen1: { red: 14, green: 58, blue: 47 },       // #0e3a2f
@@ -9,12 +11,33 @@ const COLOR_REFERENCES = {
 const COLOR_DISTANCE_THRESHOLD = 40;
 const LUMINANCE_THRESHOLD = 128;
 
-const BADGES = {
-    darkGreen: 'assets/dark_green_bg_badge.png',
-    electricGreen: 'assets/electric_green_bg_badge.png',
-    dark: 'assets/dark_bg_badge.png',
-    light: 'assets/light_bg_badge.png'
+function resolveBadgePath(fileName) {
+    const candidates = [
+        path.join(__dirname, '..', 'assets', fileName),
+        path.join(process.cwd(), 'assets', fileName),
+        process.resourcesPath ? path.join(process.resourcesPath, 'assets', fileName) : null,
+        process.resourcesPath ? path.join(process.resourcesPath, 'app.asar.unpacked', 'assets', fileName) : null
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+            return candidate;
+        }
+    }
+    return path.join(__dirname, '..', 'assets', fileName);
+}
+
+const BADGE_FILES = {
+    darkGreen: 'dark_green_bg_badge.png',
+    electricGreen: 'electric_green_bg_badge.png',
+    dark: 'dark_bg_badge.png',
+    light: 'light_bg_badge.png'
 };
+
+function getBadgePath(badgeType) {
+    const fileName = BADGE_FILES[badgeType] || 'dark_bg_badge.png';
+    return resolveBadgePath(fileName);
+}
 
 function isActuallyGreen(color) {
     return (
@@ -183,7 +206,7 @@ async function processImage(inputPath, outputPath) {
 
     const selectedBadge = await getBottomRightSample(inputPath);
 
-    const badgePath = BADGES[selectedBadge];
+    const badgePath = getBadgePath(selectedBadge);
 
     console.log('Badge file:', badgePath);
 

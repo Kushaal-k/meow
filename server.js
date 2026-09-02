@@ -35,15 +35,25 @@ const upload = multer({
     }
 });
 
+function resolveStaticPath(folderName) {
+    if (process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, folderName))) {
+        return path.join(process.resourcesPath, folderName);
+    }
+    if (process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, 'app.asar.unpacked', folderName))) {
+        return path.join(process.resourcesPath, 'app.asar.unpacked', folderName);
+    }
+    return path.join(__dirname, folderName);
+}
+
 app.use(
     express.static(
-        path.join(__dirname, 'public')
+        resolveStaticPath('public')
     )
 );
 app.use(
     '/assets',
     express.static(
-        path.join(__dirname, 'assets')
+        resolveStaticPath('assets')
     )
 );
 
@@ -956,29 +966,53 @@ app.get(
 // START SERVER
 // ============================================================
 
-app.listen(
-    PORT,
-    () => {
+function startServer(preferredPort = PORT, host = '127.0.0.1') {
+    return new Promise((resolve, reject) => {
+        const tryListen = (portToTry) => {
+            const server = app.listen(portToTry, host, () => {
+                const address = server.address();
+                const actualPort = address.port;
+                console.log('');
+                console.log('====================================');
+                console.log('          AI BADGE STUDIO');
+                console.log('====================================');
+                console.log('');
+                console.log(`Running at http://${host}:${actualPort}`);
+                console.log('');
 
-        console.log('');
-        console.log(
-            '===================================='
-        );
+                resolve({
+                    app,
+                    server,
+                    port: actualPort,
+                    host,
+                    stopServer: () => new Promise((res) => server.close(res))
+                });
+            });
 
-        console.log(
-            '          AI BADGE STUDIO'
-        );
+            server.on('error', (err) => {
+                if (err.code === 'EADDRINUSE' && portToTry !== 0) {
+                    console.warn(`Port ${portToTry} is in use. Trying random available port...`);
+                    tryListen(0);
+                } else {
+                    reject(err);
+                }
+            });
+        };
 
-        console.log(
-            '===================================='
-        );
+        tryListen(preferredPort);
+    });
+}
 
-        console.log('');
+if (require.main === module) {
+    startServer(PORT).catch((err) => {
+        console.error('Failed to start server:', err);
+        process.exit(1);
+    });
+}
 
-        console.log(
-            `Running at http://localhost:${PORT}`
-        );
-
-        console.log('');
-    }
-);
+module.exports = {
+    app,
+    startServer,
+    TEMP_ROOT,
+    cleanupDirectory
+};
