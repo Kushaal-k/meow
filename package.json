@@ -41,6 +41,7 @@
   "build": {
     "appId": "com.aibadgestudio.app",
     "productName": "AI Badge Studio",
+    "afterPack": "scripts/afterPack.js",
     "compression": "normal",
     "electronLanguages": [
       "en-US",

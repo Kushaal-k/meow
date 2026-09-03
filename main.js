@@ -1,6 +1,11 @@
-const { app, BrowserWindow, Menu, shell, dialog } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+
+// Ensure Windows Taskbar associates the window with AI Badge Studio rather than the default Electron runtime
+if (process.platform === 'win32') {
+    app.setAppUserModelId('com.aibadgestudio.app');
+}
 
 // Trap any startup errors and show a native dialog box instead of failing silently
 process.on('uncaughtException', (error) => {
@@ -140,14 +145,32 @@ function buildApplicationMenu() {
     Menu.setApplicationMenu(menu);
 }
 
-function createWindow(port) {
-    const iconCandidates = [
-        process.platform === 'win32' ? path.join(__dirname, 'assets', 'icon.ico') : null,
+function getAppIcon() {
+    const candidates = [
+        process.resourcesPath ? path.join(process.resourcesPath, 'assets', 'icon.ico') : null,
+        process.resourcesPath ? path.join(process.resourcesPath, 'assets', 'app-icon.png') : null,
+        path.join(__dirname, 'assets', 'icon.ico'),
         path.join(__dirname, 'assets', 'app-icon.png'),
         path.join(__dirname, 'assets', 'icon.png')
     ].filter(Boolean);
 
-    const iconPath = iconCandidates.find(p => fs.existsSync(p));
+    for (const p of candidates) {
+        if (fs.existsSync(p)) {
+            try {
+                const img = nativeImage.createFromPath(p);
+                if (!img.isEmpty()) {
+                    return img;
+                }
+            } catch (e) {
+                console.warn('Failed to load icon from:', p, e);
+            }
+        }
+    }
+    return null;
+}
+
+function createWindow(port) {
+    const appIcon = getAppIcon();
 
     mainWindow = new BrowserWindow({
         width: 1240,
@@ -157,7 +180,7 @@ function createWindow(port) {
         title: 'AI Badge Studio',
         backgroundColor: '#0a100d',
         show: false,
-        icon: iconPath,
+        icon: appIcon || undefined,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: false,
@@ -165,6 +188,10 @@ function createWindow(port) {
             sandbox: true
         }
     });
+
+    if (appIcon && !appIcon.isEmpty()) {
+        mainWindow.setIcon(appIcon);
+    }
 
     const targetUrl = `http://127.0.0.1:${port}`;
     console.log(`Loading application UI from: ${targetUrl}`);
@@ -209,6 +236,12 @@ function createWindow(port) {
 
 async function startApp() {
     try {
+        if (process.platform === 'darwin' && app.dock) {
+            const dockIcon = path.join(__dirname, 'assets', 'app-icon.png');
+            if (fs.existsSync(dockIcon)) {
+                app.dock.setIcon(dockIcon);
+            }
+        }
         buildApplicationMenu();
         serverInstance = await startServer(3000, '127.0.0.1');
         serverPort = serverInstance.port;
