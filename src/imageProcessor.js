@@ -11,6 +11,11 @@ const COLOR_REFERENCES = {
 const COLOR_DISTANCE_THRESHOLD = 40;
 const LUMINANCE_THRESHOLD = 128;
 
+const SHARP_OPTIONS = {
+    limitInputPixels: false,
+    unlimited: true
+};
+
 function resolveBadgePath(fileName) {
     const candidates = [
         path.join(__dirname, '..', 'assets', fileName),
@@ -144,7 +149,7 @@ function selectBadge(color) {
 }
 
 async function getBottomRightSample(inputPath) {
-    const image = sharp(inputPath);
+    const image = sharp(inputPath, SHARP_OPTIONS);
 
     const metadata = await image.metadata();
 
@@ -196,7 +201,7 @@ async function processImage(inputPath, outputPath) {
     console.log('Input:', inputPath);
     console.log('Output:', outputPath);
 
-    const image = sharp(inputPath);
+    const image = sharp(inputPath, SHARP_OPTIONS);
 
     const metadata = await image.metadata();
 
@@ -214,7 +219,7 @@ async function processImage(inputPath, outputPath) {
     const badgeHeight = Math.round(metadata.height * 0.28);
 
    
-    const badgeBuffer = await sharp(badgePath)
+    const badgeBuffer = await sharp(badgePath, SHARP_OPTIONS)
         .resize({
             height: badgeHeight,
             fit: 'contain'
@@ -225,7 +230,7 @@ async function processImage(inputPath, outputPath) {
     const rightMargin = -Math.round(metadata.width * 0.015);
     const bottomMargin = -Math.round(metadata.height * 0.05);
 
-    const badgeMetadata = await sharp(badgeBuffer).metadata();
+    const badgeMetadata = await sharp(badgeBuffer, SHARP_OPTIONS).metadata();
 
     const left = metadata.width -
         badgeMetadata.width -
@@ -243,7 +248,7 @@ async function processImage(inputPath, outputPath) {
     console.log('Left:', left);
     console.log('Top:', top);
 
-    const outputImage = sharp(inputPath)
+    const outputImage = sharp(inputPath, SHARP_OPTIONS)
     .composite([
         {
             input: badgeBuffer,
@@ -314,7 +319,7 @@ switch (metadata.format) {
         );
 }
 
-    const outputMetadata = await sharp(outputPath).metadata();
+    const outputMetadata = await sharp(outputPath, SHARP_OPTIONS).metadata();
 
     console.log('--------------------------------');
     console.log('Image processing completed');
