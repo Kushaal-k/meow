@@ -523,6 +523,86 @@ body.is-resizing #layoutResizer * {
 }
 
 /* ============================================================
+   MEDIA MODE TABS (ABOVE DROPZONE)
+   ============================================================ */
+
+.media-tabs-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 18px;
+}
+
+.media-tabs {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    gap: 4px;
+}
+
+.media-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 22px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.media-tab:hover {
+    color: var(--text-heading);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.media-tab.active {
+    background: var(--primary-btn-bg);
+    color: var(--primary-btn-text);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.media-tab .tab-icon-svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    flex-shrink: 0;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.2s;
+}
+
+.media-tab:hover .tab-icon-svg {
+    transform: scale(1.1);
+}
+
+.media-tab.active .tab-icon-svg {
+    stroke: var(--primary-btn-text);
+}
+
+/* Video previews */
+.single-preview-video {
+    width: 100%;
+    max-height: 380px;
+    border-radius: 14px;
+    background: #000;
+    outline: none;
+}
+
+.modal-video {
+    max-width: 100%;
+    max-height: 80vh;
+    border-radius: 12px;
+    background: #000;
+    outline: none;
+}
+
+/* ============================================================
    DROP ZONE
    ============================================================ */
 
@@ -807,8 +887,8 @@ body.is-resizing #layoutResizer * {
 
 .processing-icon,
 .success-icon {
-    width: 60px;
-    height: 60px;
+    width: 64px;
+    height: 64px;
 
     margin: 0 auto 25px;
 
@@ -816,17 +896,23 @@ body.is-resizing #layoutResizer * {
     align-items: center;
     justify-content: center;
 
-    border-radius: 22px;
+    border-radius: 20px;
 
-    background: var(--accent-light);
-    color: var(--primary);
+    background: var(--secondary);
+    color: #07221b;
 
     font-size: 28px;
 }
 
+.processing-icon {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
 .processing-icon img {
-    width: auto;
-    height: 100px;
+    width: 38px;
+    height: 38px;
+    object-fit: contain;
+    display: block;
 }
 
 .success-icon {
@@ -1009,6 +1095,17 @@ body.is-resizing #layoutResizer * {
     border-color: var(--secondary);
 }
 
+.result-thumb-wrapper {
+    position: relative;
+    width: 100%;
+    border-radius: 8px;
+    background: var(--accent-light);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .result-thumb {
     width: 100%;
     aspect-ratio: auto;
@@ -1018,6 +1115,29 @@ body.is-resizing #layoutResizer * {
     object-fit: contain;
     background: var(--accent-light);
     display: block;
+}
+
+.result-video-thumb {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    background: #000;
+}
+
+.result-badge-type {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    padding: 3px 7px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: #07221b;
+    background: var(--secondary);
+    border-radius: 5px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+    z-index: 2;
 }
 
 .result-checkbox {
@@ -1044,40 +1164,56 @@ body.is-resizing #layoutResizer * {
 }
 
 .result-download {
-    padding: 0 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
     font-size: 11px;
     font-weight: 700;
-    color: var(--secondary-dark);
+    border-radius: 6px;
     text-decoration: none;
     text-align: left;
+    background: rgba(14, 58, 47, 0.08);
+    color: #0e3a2f;
+    transition: all 0.15s ease;
+    width: fit-content;
 }
 
 [data-theme="dark"] .result-download {
+    background: rgba(120, 250, 174, 0.12);
     color: var(--secondary);
 }
 
-.result-download:hover {
-    color: var(--primary);
+.result-download:hover,
+[data-theme="dark"] .result-download:hover {
+    background: var(--secondary);
+    color: #07221b;
 }
 
-/* Row View Override */
+/* Row / List View Override */
 .results-list.row-view {
     display: flex;
     flex-direction: column;
     gap: 0;
     grid-template-columns: none;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card-bg);
+    overflow: hidden;
 }
 
 .results-list.row-view .result-row {
+    display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
 
     border: 0;
     border-bottom: 1px solid var(--border);
     border-radius: 0;
-    padding: 12px 8px;
+    padding: 10px 16px;
     background: transparent;
+    transition: background 0.15s ease;
 }
 
 .results-list.row-view .result-row:hover {
@@ -1090,6 +1226,25 @@ body.is-resizing #layoutResizer * {
     border-bottom: 0;
 }
 
+.results-list.row-view .result-checkbox {
+    position: static;
+    background: none;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    margin: 0;
+}
+
+.results-list.row-view .result-thumb-wrapper {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    margin: 0;
+    background: var(--accent-light);
+    overflow: hidden;
+}
+
 .results-list.row-view .result-thumb {
     width: 48px;
     height: 48px;
@@ -1097,25 +1252,64 @@ body.is-resizing #layoutResizer * {
     max-height: none;
     flex-shrink: 0;
     border-radius: 6px;
+    object-fit: cover;
 }
 
-.results-list.row-view .result-checkbox {
-    position: static;
-    background: none;
-    width: 18px;
-    height: 18px;
+.results-list.row-view .result-video-thumb {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+}
+
+.results-list.row-view .result-badge-type {
+    display: none;
 }
 
 .results-list.row-view .result-name {
     flex: 1;
+    font-size: 13px;
+    font-weight: 600;
     text-align: left;
+    color: var(--text-heading);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.results-list.row-view .result-download {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    background: rgba(14, 58, 47, 0.08);
+    color: #0e3a2f;
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+
+[data-theme="dark"] .results-list.row-view .result-download {
+    background: rgba(120, 250, 174, 0.14);
+    color: var(--secondary);
+}
+
+.results-list.row-view .result-download:hover,
+[data-theme="dark"] .results-list.row-view .result-download:hover {
+    background: var(--secondary);
+    color: #07221b;
 }
 
 .download-button {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
 
     margin-top: 24px;
-    padding: 15px 25px;
+    padding: 15px 28px;
 
     border-radius: 11px;
 
@@ -1130,6 +1324,33 @@ body.is-resizing #layoutResizer * {
     cursor: pointer;
 
     transition: transform .2s, opacity .2s;
+}
+
+.download-arrow-svg {
+    width: 15px;
+    height: 15px;
+    stroke: currentColor;
+    stroke-width: 3;
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+.result-download .download-arrow-svg {
+    width: 12px;
+    height: 12px;
+    stroke-width: 3.2;
+}
+
+.modal-download-btn .download-arrow-svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 3;
+}
+
+.download-button:hover .download-arrow-svg,
+.modal-download-btn:hover .download-arrow-svg,
+.result-download:hover .download-arrow-svg {
+    transform: translateY(1.5px);
 }
 
 .download-button:hover {
@@ -1335,6 +1556,7 @@ body.is-resizing #layoutResizer * {
 .modal-download-btn {
     display: inline-flex;
     align-items: center;
+    gap: 6px;
     padding: 8px 16px;
     background: var(--primary-btn-bg);
     color: var(--primary-btn-text);

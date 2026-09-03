@@ -11,12 +11,20 @@ const crypto = require('crypto');
 
 
 const { processImage } = require('./src/imageProcessor');
+const {
+    processVideo,
+    SUPPORTED_VIDEOS,
+    extractVideoThumbnail,
+    getVideoMetadata
+} = require('./src/videoProcessor');
 
 const app = express();
 
 const PORT = 3000;
 const MAX_FILES = 250;
+const MAX_VIDEOS = 10;
 const CONCURRENCY = Math.max(2, Math.min(8, os.cpus().length || 4));
+const VIDEO_CONCURRENCY = Math.max(1, Math.min(2, Math.floor((os.cpus().length || 4) / 2)));
 
 const TEMP_ROOT = path.join(
     os.tmpdir(),
@@ -116,6 +124,12 @@ function isZip(fileName) {
     return path
         .extname(fileName)
         .toLowerCase() === '.zip';
+}
+
+function isVideo(fileName) {
+    return SUPPORTED_VIDEOS.includes(
+        path.extname(fileName).toLowerCase()
+    );
 }
 
 
@@ -444,6 +458,55 @@ async function processImageUploads(
 
 
 // ============================================================
+// PROCESS NORMAL VIDEO UPLOADS
+// ============================================================
+
+async function processVideoUploads(
+    files,
+    jobDirectory
+) {
+
+    const outputDirectory =
+        path.join(
+            jobDirectory,
+            'output'
+        );
+
+    fs.mkdirSync(
+        outputDirectory,
+        {
+            recursive: true
+        }
+    );
+
+    const validFiles = files.filter(file => isVideo(file.originalname));
+
+    if (validFiles.length > MAX_VIDEOS) {
+        throw new Error(
+            `Maximum limit is ${MAX_VIDEOS} videos at a time. Received ${validFiles.length} videos.`
+        );
+    }
+
+    const results = await mapConcurrent(
+        validFiles,
+        VIDEO_CONCURRENCY,
+        async (file) => {
+            return await processVideo(
+                file.path,
+                file.originalname,
+                outputDirectory
+            );
+        }
+    );
+
+    return {
+        outputDirectory,
+        results
+    };
+}
+
+
+// ============================================================
 // PROCESS ZIP
 // ============================================================
 
@@ -508,16 +571,31 @@ async function processZip(
         return SUPPORTED_IMAGES.includes(ext);
     });
 
-    if (imageEntries.length === 0) {
+    const videoEntries = validEntries.filter(entry => {
+        const ext = path.extname(safeZipPath(entry.path)).toLowerCase();
+        return SUPPORTED_VIDEOS.includes(ext);
+    });
+
+    if (imageEntries.length === 0 && videoEntries.length === 0) {
         throw new Error(
-            'No supported image files (.jpg, .jpeg, .png, .webp, etc.) were found inside the ZIP archive.'
+            'No supported image or video files were found inside the ZIP archive.'
         );
     }
 
-    if (imageEntries.length > MAX_FILES) {
-        throw new Error(
-            `The uploaded ZIP contains ${imageEntries.length} images. The maximum allowed limit is ${MAX_FILES} images.`
-        );
+    const isVideoZip = videoEntries.length > 0 && imageEntries.length === 0;
+
+    if (isVideoZip) {
+        if (videoEntries.length > MAX_VIDEOS) {
+            throw new Error(
+                `The uploaded ZIP contains ${videoEntries.length} videos. The maximum allowed limit is ${MAX_VIDEOS} videos.`
+            );
+        }
+    } else {
+        if (imageEntries.length > MAX_FILES) {
+            throw new Error(
+                `The uploaded ZIP contains ${imageEntries.length} images. The maximum allowed limit is ${MAX_FILES} images.`
+            );
+        }
     }
 
     // Extract files sequentially to prevent unzipper file descriptor collisions
@@ -540,16 +618,25 @@ async function processZip(
             sourcePath,
             originalFileName: path.basename(zipPath),
             relativeDirectory: path.dirname(zipPath) === '.' ? '' : path.dirname(zipPath),
-            isImage: SUPPORTED_IMAGES.includes(extension)
+            isImage: SUPPORTED_IMAGES.includes(extension),
+            isVideo: SUPPORTED_VIDEOS.includes(extension)
         });
     }
 
-    // Process extracted images in parallel using worker pool
+    // Process extracted items using appropriate concurrency
+    const concurrency = isVideoZip ? VIDEO_CONCURRENCY : CONCURRENCY;
     const results = await mapConcurrent(
         filesToProcess,
-        CONCURRENCY,
+        concurrency,
         async (item) => {
-            if (item.isImage) {
+            if (item.isVideo) {
+                return await processVideo(
+                    item.sourcePath,
+                    item.originalFileName,
+                    outputDirectory,
+                    item.relativeDirectory
+                );
+            } else if (item.isImage) {
                 return await processOneImage(
                     item.sourcePath,
                     item.originalFileName,
@@ -572,7 +659,8 @@ async function processZip(
 
     return {
         outputDirectory,
-        results
+        results,
+        mediaType: isVideoZip ? 'video' : 'image'
     };
 }
 
@@ -624,15 +712,29 @@ app.post('/api/inspect-zip', upload.single('zipFile'), async (req, res) => {
             return SUPPORTED_IMAGES.includes(ext);
         });
 
-        if (imageEntries.length === 0) {
+        const videoEntries = validEntries.filter(entry => {
+            const ext = path.extname(safeZipPath(entry.path)).toLowerCase();
+            return SUPPORTED_VIDEOS.includes(ext);
+        });
+
+        if (imageEntries.length === 0 && videoEntries.length === 0) {
             return res.status(400).json({
-                error: 'No supported image files (.jpg, .jpeg, .png, .webp, etc.) were found inside the ZIP archive.'
+                error: 'No supported image or video files were found inside the ZIP archive.'
             });
         }
 
-        if (imageEntries.length > MAX_FILES) {
+        const isVideoZip = videoEntries.length > 0 && (imageEntries.length === 0 || (req.body && req.body.mediaMode === 'videos'));
+        const targetEntries = isVideoZip ? videoEntries : imageEntries;
+        const mediaType = isVideoZip ? 'video' : 'image';
+
+        if (isVideoZip && targetEntries.length > MAX_VIDEOS) {
             return res.status(400).json({
-                error: `The uploaded ZIP contains ${imageEntries.length} images. The maximum allowed limit is ${MAX_FILES} images.`
+                error: `The uploaded ZIP contains ${targetEntries.length} videos. The maximum allowed limit is ${MAX_VIDEOS} videos.`
+            });
+        }
+        if (!isVideoZip && targetEntries.length > MAX_FILES) {
+            return res.status(400).json({
+                error: `The uploaded ZIP contains ${targetEntries.length} images. The maximum allowed limit is ${MAX_FILES} images.`
             });
         }
 
@@ -646,9 +748,9 @@ app.post('/api/inspect-zip', upload.single('zipFile'), async (req, res) => {
 
         const inspectedFiles = [];
 
-        // Extract each image entry and generate a fast WebP thumbnail
-        for (let i = 0; i < imageEntries.length; i++) {
-            const entry = imageEntries[i];
+        // Extract each entry and generate thumbnail
+        for (let i = 0; i < targetEntries.length; i++) {
+            const entry = targetEntries[i];
             const zPath = safeZipPath(entry.path);
             const entryName = path.basename(zPath);
             const sourcePath = path.join(extractedDir, zPath);
@@ -663,15 +765,22 @@ app.post('/api/inspect-zip', upload.single('zipFile'), async (req, res) => {
                     .on('error', reject);
             });
 
-            // Generate small thumbnail (280x280) for instant preview
-            try {
-                await sharp(sourcePath, { limitInputPixels: false, unlimited: true })
-                    .rotate()
-                    .resize({ width: 280, height: 280, fit: 'inside' })
-                    .webp({ quality: 80 })
-                    .toFile(thumbPath);
-            } catch (thumbErr) {
-                console.warn(`Could not generate thumbnail for ${entryName}:`, thumbErr.message);
+            if (isVideoZip) {
+                try {
+                    await extractVideoThumbnail(sourcePath, thumbPath, 1);
+                } catch (thumbErr) {
+                    console.warn(`Could not generate thumbnail for video ${entryName}:`, thumbErr.message);
+                }
+            } else {
+                try {
+                    await sharp(sourcePath, { limitInputPixels: false, unlimited: true })
+                        .rotate()
+                        .resize({ width: 280, height: 280, fit: 'inside' })
+                        .webp({ quality: 80 })
+                        .toFile(thumbPath);
+                } catch (thumbErr) {
+                    console.warn(`Could not generate thumbnail for image ${entryName}:`, thumbErr.message);
+                }
             }
 
             const stats = fs.statSync(sourcePath);
@@ -681,6 +790,7 @@ app.post('/api/inspect-zip', upload.single('zipFile'), async (req, res) => {
                 name: entryName,
                 path: zPath,
                 size: stats.size,
+                mediaType,
                 thumbUrl: fs.existsSync(thumbPath)
                     ? `/api/inspect-thumb/${inspectionId}/${i}`
                     : `/api/inspect-raw/${inspectionId}/${i}`,
@@ -693,6 +803,7 @@ app.post('/api/inspect-zip', upload.single('zipFile'), async (req, res) => {
             zipPath,
             originalName,
             isTempUpload,
+            mediaType,
             inspectionDir,
             extractedDir,
             files: inspectedFiles,
@@ -779,26 +890,40 @@ app.post(
                     const outputDirectory = path.join(jobDirectory, 'zip-output');
                     fs.mkdirSync(outputDirectory, { recursive: true });
 
+                    const isVideoSession = session.mediaType === 'video';
+                    const concurrency = isVideoSession ? VIDEO_CONCURRENCY : CONCURRENCY;
+
                     const results = await mapConcurrent(
                         session.files,
-                        CONCURRENCY,
+                        concurrency,
                         async (item) => {
                             const sourcePath = path.join(session.extractedDir, item.path);
-                            return await processOneImage(
-                                sourcePath,
-                                item.name,
-                                outputDirectory,
-                                path.dirname(item.path) === '.' ? '' : path.dirname(item.path)
-                            );
+                            if (isVideoSession) {
+                                return await processVideo(
+                                    sourcePath,
+                                    item.name,
+                                    outputDirectory,
+                                    path.dirname(item.path) === '.' ? '' : path.dirname(item.path)
+                                );
+                            } else {
+                                return await processOneImage(
+                                    sourcePath,
+                                    item.name,
+                                    outputDirectory,
+                                    path.dirname(item.path) === '.' ? '' : path.dirname(item.path)
+                                );
+                            }
                         }
                     );
 
-                    const outputZip = path.join(jobDirectory, 'AI-Badged-Images.zip');
+                    const zipName = isVideoSession ? 'AI-Badged-Videos.zip' : 'AI-Badged-Images.zip';
+                    const outputZip = path.join(jobDirectory, zipName);
                     await createZip(outputDirectory, outputZip);
 
                     const jobId = path.basename(jobDirectory);
                     resultsStore.set(jobId, {
                         type: 'zip',
+                        mediaType: isVideoSession ? 'video' : 'image',
                         zipPath: outputZip,
                         results
                     });
@@ -813,6 +938,7 @@ app.post(
                     return res.json({
                         success: true,
                         type: 'zip',
+                        mediaType: isVideoSession ? 'video' : 'image',
                         total: results.length,
                         processed: results.length,
                         downloadUrl: `/api/download/${jobId}/zip`,
@@ -820,6 +946,10 @@ app.post(
                         files: results.map((item, index) => ({
                             id: index,
                             name: item.name,
+                            mediaType: isVideoSession ? 'video' : 'image',
+                            thumbUrl: (isVideoSession && item.thumbPath)
+                                ? `/api/thumb/${jobId}/${index}`
+                                : `/api/preview/${jobId}/${index}`,
                             url: `/api/download/${jobId}/${index}`,
                             previewUrl: `/api/preview/${jobId}/${index}`
                         }))
@@ -945,6 +1075,20 @@ app.post(
             // NORMAL IMAGE MODE
             // ==================================================
 
+            const isVideoUpload = req.files.some(file => isVideo(file.originalname)) || (req.body && req.body.mediaMode === 'videos');
+
+            if (isVideoUpload && req.files.length > MAX_VIDEOS) {
+                return res.status(400).json({
+                    error: `Maximum limit is ${MAX_VIDEOS} videos at a time. Received ${req.files.length} files.`
+                });
+            }
+
+            if (!isVideoUpload && req.files.length > MAX_FILES) {
+                return res.status(400).json({
+                    error: `Maximum limit is ${MAX_FILES} images at a time. Received ${req.files.length} files.`
+                });
+            }
+
             jobDirectory =
                 path.join(
                     TEMP_ROOT,
@@ -958,20 +1102,17 @@ app.post(
                 }
             );
 
-            const result =
-                await processImageUploads(
+            let result;
+            if (isVideoUpload) {
+                result = await processVideoUploads(
                     req.files,
                     jobDirectory
                 );
-
-            if (
-                result.results.length === 0
-            ) {
-
-                return res.status(400).json({
-                    error:
-                        'No supported image files were found.'
-                });
+            } else {
+                result = await processImageUploads(
+                    req.files,
+                    jobDirectory
+                );
             }
 
             const jobId =
@@ -979,42 +1120,41 @@ app.post(
                     jobDirectory
                 );
 
-            resultsStore.set(
-                jobId,
-                {
-                    type: 'images',
-                    results:
-                        result.results
-                }
-            );
-
             /*
-             * Single image:
-             * return one direct download.
+             * Single file:
+             * direct download without ZIP.
              */
-            if (
-                result.results.length === 1
-            ) {
+            if (req.files.length === 1) {
+
+                const item =
+                    result.results[0];
+
+                resultsStore.set(
+                    jobId,
+                    {
+                        type: isVideoUpload ? 'video' : 'image',
+                        mediaType: isVideoUpload ? 'video' : 'image',
+                        results:
+                            result.results
+                    }
+                );
 
                 return res.json({
-
                     success: true,
-
                     type: 'single',
-
+                    mediaType: isVideoUpload ? 'video' : 'image',
                     total: 1,
-
                     processed: 1,
-
                     files: [
                         {
                             id: 0,
-                            name:
-                                result.results[0].name,
-
+                            name: item.name,
+                            mediaType: isVideoUpload ? 'video' : 'image',
+                            thumbUrl: (isVideoUpload && item.thumbPath)
+                                ? `/api/thumb/${jobId}/0`
+                                : `/api/preview/${jobId}/0`,
                             url:
                                 `/api/download/${jobId}/0`,
-
                             previewUrl:
                                 `/api/preview/${jobId}/0`
                         }
@@ -1024,15 +1164,14 @@ app.post(
 
 
             /*
-             * Multiple images:
-             * individual downloads + optional
-             * Download All ZIP.
+             * Multiple files:
+             * individual downloads + Download All ZIP.
              */
-
+            const zipName = isVideoUpload ? 'AI-Badged-Videos.zip' : 'AI-Badged-Images.zip';
             const downloadZip =
                 path.join(
                     jobDirectory,
-                    'AI-Badged-Images.zip'
+                    zipName
                 );
 
             await createZipFromFiles(
@@ -1043,7 +1182,8 @@ app.post(
             resultsStore.set(
                 jobId,
                 {
-                    type: 'images',
+                    type: isVideoUpload ? 'videos' : 'images',
+                    mediaType: isVideoUpload ? 'video' : 'image',
                     results:
                         result.results,
                     zipPath:
@@ -1056,6 +1196,7 @@ app.post(
                 success: true,
 
                 type: 'multiple',
+                mediaType: isVideoUpload ? 'video' : 'image',
 
                 total:
                     result.results.length,
@@ -1068,6 +1209,10 @@ app.post(
                         (item, index) => ({
                             id: index,
                             name: item.name,
+                            mediaType: isVideoUpload ? 'video' : 'image',
+                            thumbUrl: (isVideoUpload && item.thumbPath)
+                                ? `/api/thumb/${jobId}/${index}`
+                                : `/api/preview/${jobId}/${index}`,
                             url:
                                 `/api/download/${jobId}/${index}`,
                             previewUrl:
@@ -1160,6 +1305,29 @@ app.get(
         return res.sendFile(
             result.path
         );
+    }
+);
+
+app.get(
+    '/api/thumb/:jobId/:file',
+    (req, res) => {
+        const { jobId, file } = req.params;
+        const job = resultsStore.get(jobId);
+        if (!job) return res.status(404).send('Processing result not found.');
+
+        const index = Number(file);
+        if (Number.isNaN(index) || index < 0 || index >= job.results.length) {
+            return res.status(404).send('File not found.');
+        }
+
+        const item = job.results[index];
+        if (item && item.thumbPath && fs.existsSync(item.thumbPath)) {
+            return res.sendFile(item.thumbPath);
+        }
+        if (item && item.path && fs.existsSync(item.path)) {
+            return res.sendFile(item.path);
+        }
+        return res.status(404).send('File no longer exists.');
     }
 );
 

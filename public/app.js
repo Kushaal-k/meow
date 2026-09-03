@@ -76,6 +76,24 @@ const singleFileName =
 const singleFileMeta =
     document.getElementById('singleFileMeta');
 
+const singlePreviewVideo =
+    document.getElementById('singlePreviewVideo');
+
+const tabImages =
+    document.getElementById('tabImages');
+
+const tabVideos =
+    document.getElementById('tabVideos');
+
+const dropZoneTitle =
+    document.getElementById('dropZoneTitle');
+
+const dropZoneSubtitle =
+    document.getElementById('dropZoneSubtitle');
+
+const dropZoneFormats =
+    document.getElementById('dropZoneFormats');
+
 const previewModal =
     document.getElementById('previewModal');
 
@@ -88,8 +106,14 @@ const modalCloseBtn =
 const modalFileName =
     document.getElementById('modalFileName');
 
+const modalVideo =
+    document.getElementById('modalVideo');
+
 const modalDownloadBtn =
     document.getElementById('modalDownloadBtn');
+
+const DOWNLOAD_ARROW_SVG = `<svg class="download-arrow-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="19"></line><polyline points="6 13 12 19 18 13"></polyline></svg>`;
+const DOWNLOAD_ARROW_SMALL_SVG = `<svg class="download-arrow-svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="19"></line><polyline points="6 13 12 19 18 13"></polyline></svg>`;
 
 const themeToggleBtn =
     document.getElementById('themeToggleBtn');
@@ -130,8 +154,11 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e)
 
 applyTheme(document.documentElement.getAttribute('data-theme') || getPreferredTheme());
 
+let currentMediaMode = 'images';
 let selectedFiles = [];
 let activeZipSession = null;
+let selectedVideos = [];
+let activeVideoZipSession = null;
 
 const supportedExtensions = [
     '.jpg',
@@ -152,6 +179,14 @@ const supportedExtensions = [
     '.heif'
 ];
 
+const supportedVideoExtensions = [
+    '.mp4',
+    '.mov',
+    '.webm',
+    '.mkv',
+    '.avi'
+];
+
 function isImage(file) {
 
     const extension =
@@ -166,12 +201,89 @@ function isImage(file) {
     );
 }
 
+function isVideo(file) {
+    const name = (file && file.name) ? file.name : (typeof file === 'string' ? file : '');
+    const ext = name.substring(name.lastIndexOf('.')).toLowerCase();
+    return supportedVideoExtensions.includes(ext);
+}
+
 function isZip(file) {
 
     return file.name
         .toLowerCase()
         .endsWith('.zip');
 }
+
+function createVideoThumbnail(file) {
+    return new Promise((resolve) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        const url = URL.createObjectURL(file);
+        video.src = url;
+        video.muted = true;
+        video.playsInline = true;
+        video.currentTime = 1;
+
+        const cleanup = () => {
+            video.onseeked = null;
+            video.onerror = null;
+            URL.revokeObjectURL(url);
+        };
+
+        video.onseeked = () => {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.min(320, video.videoWidth || 320);
+                canvas.height = Math.min(240, video.videoHeight || 240);
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const dataUrl = canvas.toDataURL('image/webp', 0.8);
+                cleanup();
+                resolve(dataUrl);
+            } catch (_) {
+                cleanup();
+                resolve('');
+            }
+        };
+
+        video.onerror = () => {
+            cleanup();
+            resolve('');
+        };
+    });
+}
+
+function switchMediaTab(mode) {
+    if (mode === currentMediaMode) return;
+    currentMediaMode = mode;
+
+    if (mode === 'images') {
+        tabImages.classList.add('active');
+        tabImages.setAttribute('aria-selected', 'true');
+        tabVideos.classList.remove('active');
+        tabVideos.setAttribute('aria-selected', 'false');
+
+        dropZoneTitle.textContent = 'Drop your files here';
+        dropZoneSubtitle.textContent = 'Images or a ZIP containing images';
+        dropZoneFormats.textContent = 'JPG · JPEG · PNG · WEBP · ZIP (Up to 250 images)';
+        fileInput.accept = '.jpg,.jpeg,.png,.webp,.zip';
+    } else {
+        tabVideos.classList.add('active');
+        tabVideos.setAttribute('aria-selected', 'true');
+        tabImages.classList.remove('active');
+        tabImages.setAttribute('aria-selected', 'false');
+
+        dropZoneTitle.textContent = 'Drop your videos here';
+        dropZoneSubtitle.textContent = 'Videos or a ZIP containing videos';
+        dropZoneFormats.textContent = 'MP4 · MOV · WEBM · MKV · ZIP (Up to 10 videos, 5GB max)';
+        fileInput.accept = '.mp4,.mov,.webm,.mkv,.zip';
+    }
+
+    renderFiles();
+}
+
+if (tabImages) tabImages.addEventListener('click', () => switchMediaTab('images'));
+if (tabVideos) tabVideos.addEventListener('click', () => switchMediaTab('videos'));
 
 function formatSize(bytes) {
 
@@ -309,12 +421,13 @@ function showPanelState(state) {
 // ============================================================
 
 async function inspectZipFile(zipFile) {
+    const isVideoMode = currentMediaMode === 'videos';
     fileGrid.innerHTML = `
         <div class="zip-inspecting-state" style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; background: rgba(120, 250, 174, 0.05); border: 1px dashed var(--secondary); border-radius: 12px;">
             <div style="font-size: 38px; line-height: 1;">📦</div>
             <div style="margin-top: 14px; font-weight: 700; font-size: 15px; color: var(--secondary);">Inspecting ZIP Archive...</div>
             <div style="margin-top: 6px; font-size: 13px; color: var(--text-heading); font-weight: 600;">${zipFile.name} (${formatSize(zipFile.size)})</div>
-            <div style="margin-top: 4px; font-size: 12px; color: var(--muted);">Extracting image previews before processing...</div>
+            <div style="margin-top: 4px; font-size: 12px; color: var(--muted);">Extracting ${isVideoMode ? 'video' : 'image'} previews before processing...</div>
         </div>
     `;
     filesSection.classList.remove('hidden');
@@ -328,12 +441,13 @@ async function inspectZipFile(zipFile) {
             response = await fetch('/api/inspect-zip', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filePath: zipFile.path })
+                body: JSON.stringify({ filePath: zipFile.path, mediaMode: currentMediaMode })
             });
         } else {
             // Web mode: send formData
             const fd = new FormData();
             fd.append('zipFile', zipFile);
+            fd.append('mediaMode', currentMediaMode);
             response = await fetch('/api/inspect-zip', {
                 method: 'POST',
                 body: fd
@@ -345,15 +459,25 @@ async function inspectZipFile(zipFile) {
             throw new Error(data.error || 'Failed to inspect ZIP archive');
         }
 
-        activeZipSession = data;
-        selectedFiles = [zipFile];
+        if (isVideoMode) {
+            activeVideoZipSession = data;
+            selectedVideos = [zipFile];
+        } else {
+            activeZipSession = data;
+            selectedFiles = [zipFile];
+        }
         renderFiles();
 
     } catch (err) {
         console.error(err);
-        alert(`Could not preview ZIP images: ${err.message}`);
-        activeZipSession = null;
-        selectedFiles = [zipFile];
+        alert(`Could not preview ZIP files: ${err.message}`);
+        if (isVideoMode) {
+            activeVideoZipSession = null;
+            selectedVideos = [zipFile];
+        } else {
+            activeZipSession = null;
+            selectedFiles = [zipFile];
+        }
         renderFiles();
     }
 }
@@ -379,15 +503,53 @@ async function addFiles(files) {
             return;
         }
 
-        if (incoming.length > 1 || selectedFiles.length > 0) {
-            alert('Please select either a single ZIP file or individual images. Loading images from the ZIP archive.');
+        const currentSelection = currentMediaMode === 'videos' ? selectedVideos : selectedFiles;
+        if (incoming.length > 1 || currentSelection.length > 0) {
+            alert('Please select either a single ZIP file or individual files. Loading contents from the ZIP archive.');
         }
 
         await inspectZipFile(zip);
         return;
     }
 
-    // Normal images mode: if a ZIP was previously selected, clear it
+    // VIDEO MODE
+    if (currentMediaMode === 'videos') {
+        if (activeVideoZipSession || selectedVideos.some(isZip)) {
+            activeVideoZipSession = null;
+            selectedVideos = [];
+        }
+
+        const videos = incoming.filter(isVideo);
+
+        if (videos.length === 0) {
+            alert('Please select supported video files (.mp4, .mov, .webm, .mkv, .avi) or a .zip file.');
+            return;
+        }
+
+        const MAX_VIDEOS = 10;
+        let videosToAdd = videos;
+
+        if (selectedVideos.length + videos.length > MAX_VIDEOS) {
+            const allowed = MAX_VIDEOS - selectedVideos.length;
+            if (allowed <= 0) {
+                alert(`Maximum limit of ${MAX_VIDEOS} videos reached. You already have ${MAX_VIDEOS} videos selected.`);
+                return;
+            }
+            alert(`You can process up to ${MAX_VIDEOS} videos at a time. Only the first ${allowed} of your ${videos.length} selected videos were added.`);
+            videosToAdd = videos.slice(0, allowed);
+        }
+
+        // Generate client-side thumbnails for videos
+        for (const v of videosToAdd) {
+            v._thumbUrl = await createVideoThumbnail(v);
+            selectedVideos.push(v);
+        }
+
+        renderFiles();
+        return;
+    }
+
+    // IMAGE MODE
     if (activeZipSession || selectedFiles.some(isZip)) {
         activeZipSession = null;
         selectedFiles = [];
@@ -424,7 +586,11 @@ function renderFiles() {
 
     fileGrid.innerHTML = '';
 
-    if (selectedFiles.length === 0 && !activeZipSession) {
+    const isVideoMode = currentMediaMode === 'videos';
+    const activeList = isVideoMode ? selectedVideos : selectedFiles;
+    const activeSession = isVideoMode ? activeVideoZipSession : activeZipSession;
+
+    if (activeList.length === 0 && !activeSession) {
 
         filesSection.classList.add(
             'hidden'
@@ -441,13 +607,13 @@ function renderFiles() {
 
     setSplit(true);
 
-    // Render ZIP image previews before processing
-    if (activeZipSession && activeZipSession.files) {
+    // Render ZIP previews before processing
+    if (activeSession && activeSession.files) {
 
         fileCount.textContent =
-            `${activeZipSession.files.length} images found in ${activeZipSession.zipName}`;
+            `${activeSession.files.length} ${isVideoMode ? 'videos' : 'images'} found in ${activeSession.zipName}`;
 
-        activeZipSession.files.forEach(
+        activeSession.files.forEach(
             (file, index) => {
 
                 const card =
@@ -468,19 +634,24 @@ function renderFiles() {
                 const size =
                     document.createElement('div');
                 size.className = 'file-size';
-                size.textContent = `${formatSize(file.size)} · ZIP`;
+                size.textContent = `${formatSize(file.size)} · ${isVideoMode ? 'VIDEO' : 'ZIP'}`;
 
                 const remove =
                     document.createElement('button');
                 remove.className = 'remove-file';
                 remove.textContent = '×';
-                remove.title = 'Remove this image from processing';
+                remove.title = 'Remove this file from processing';
                 remove.onclick = (e) => {
                     e.stopPropagation();
-                    activeZipSession.files.splice(index, 1);
-                    if (activeZipSession.files.length === 0) {
-                        activeZipSession = null;
-                        selectedFiles = [];
+                    activeSession.files.splice(index, 1);
+                    if (activeSession.files.length === 0) {
+                        if (isVideoMode) {
+                            activeVideoZipSession = null;
+                            selectedVideos = [];
+                        } else {
+                            activeZipSession = null;
+                            selectedFiles = [];
+                        }
                     }
                     renderFiles();
                 };
@@ -497,15 +668,15 @@ function renderFiles() {
         return;
     }
 
-    // Render normal individual image files
+    // Render normal files (individual images or videos)
     fileCount.textContent =
-        `${selectedFiles.length} ${
-            selectedFiles.length === 1
-                ? 'file'
-                : 'files'
+        `${activeList.length} ${
+            activeList.length === 1
+                ? (isVideoMode ? 'video' : 'file')
+                : (isVideoMode ? 'videos' : 'files')
         } selected`;
 
-    selectedFiles.forEach(
+    activeList.forEach(
         (file, index) => {
 
             const card =
@@ -516,16 +687,22 @@ function renderFiles() {
             card.className =
                 'file-card';
 
-            const preview =
-                document.createElement(
-                    'img'
-                );
-
-            preview.className =
-                'file-preview';
-
-            preview.src =
-                URL.createObjectURL(file);
+            let preview;
+            if (isVideoMode) {
+                if (file._thumbUrl) {
+                    preview = document.createElement('img');
+                    preview.className = 'file-preview';
+                    preview.src = file._thumbUrl;
+                } else {
+                    preview = document.createElement('div');
+                    preview.className = 'file-preview file-preview-zip';
+                    preview.innerHTML = '<span style="font-size: 32px;">🎬</span><span style="font-size: 10px; font-weight: 700; margin-top: 5px;">VIDEO</span>';
+                }
+            } else {
+                preview = document.createElement('img');
+                preview.className = 'file-preview';
+                preview.src = URL.createObjectURL(file);
+            }
 
             preview.alt = file.name;
 
@@ -568,7 +745,7 @@ function renderFiles() {
             remove.onclick = (e) => {
                 e.stopPropagation();
 
-                selectedFiles.splice(
+                activeList.splice(
                     index,
                     1
                 );
@@ -645,8 +822,13 @@ dropZone.addEventListener(
 
 clearButton.onclick = () => {
 
-    selectedFiles = [];
-    activeZipSession = null;
+    if (currentMediaMode === 'videos') {
+        selectedVideos = [];
+        activeVideoZipSession = null;
+    } else {
+        selectedFiles = [];
+        activeZipSession = null;
+    }
 
     renderFiles();
 };
@@ -688,10 +870,26 @@ viewToggle.addEventListener('click', event => {
 function openModal(file) {
     if (!file) return;
 
-    modalFileName.textContent = file.name || 'Image Preview';
-    modalImg.src = file.previewUrl || file.url;
+    modalFileName.textContent = file.name || 'Preview';
     modalDownloadBtn.href = file.url || file.previewUrl;
-    modalDownloadBtn.download = file.name || 'image.png';
+    modalDownloadBtn.download = file.name || 'file';
+
+    const isVideoFile = file.mediaType === 'video' || (file.name && isVideo(file.name));
+
+    if (isVideoFile && modalVideo) {
+        modalImg.classList.add('hidden');
+        modalVideo.classList.remove('hidden');
+        modalVideo.src = file.previewUrl || file.url;
+        modalVideo.play().catch(() => {});
+    } else {
+        if (modalVideo) {
+            modalVideo.pause();
+            modalVideo.src = '';
+            modalVideo.classList.add('hidden');
+        }
+        modalImg.classList.remove('hidden');
+        modalImg.src = file.previewUrl || file.url;
+    }
 
     previewModal.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
@@ -700,6 +898,11 @@ function openModal(file) {
 function closeModal() {
     previewModal.classList.add('hidden');
     modalImg.src = '';
+    if (modalVideo) {
+        modalVideo.pause();
+        modalVideo.src = '';
+        modalVideo.classList.add('hidden');
+    }
     document.body.style.overflow = '';
 }
 
@@ -747,11 +950,26 @@ function renderResults(result) {
         if (files.length === 1) {
 
             const singleFile = files[0];
+            const isVideoResult = singleFile.mediaType === 'video' || result.mediaType === 'video' || (singleFile.name && isVideo(singleFile.name));
 
             singleResultPanel.classList.remove('hidden');
-            singlePreviewImg.src = singleFile.previewUrl || singleFile.url;
+
+            if (isVideoResult && singlePreviewVideo) {
+                singlePreviewImg.classList.add('hidden');
+                singlePreviewVideo.classList.remove('hidden');
+                singlePreviewVideo.src = singleFile.previewUrl || singleFile.url;
+            } else {
+                if (singlePreviewVideo) {
+                    singlePreviewVideo.classList.add('hidden');
+                    singlePreviewVideo.pause();
+                    singlePreviewVideo.src = '';
+                }
+                singlePreviewImg.classList.remove('hidden');
+                singlePreviewImg.src = singleFile.previewUrl || singleFile.url;
+            }
+
             singleFileName.textContent = singleFile.name;
-            singleFileMeta.textContent = 'Intelligent AI Badge successfully embedded';
+            singleFileMeta.textContent = isVideoResult ? 'AI Badge seamlessly encoded into video' : 'Intelligent AI Badge successfully embedded';
 
             singlePreviewTrigger.onclick = () => {
                 openModal(singleFile);
@@ -760,8 +978,8 @@ function renderResults(result) {
             downloadButton.href =
                 singleFile.url;
 
-            downloadButton.textContent =
-                `↓  Download ${singleFile.name}`;
+            downloadButton.innerHTML =
+                `${DOWNLOAD_ARROW_SVG}<span>Download ${singleFile.name}</span>`;
 
             downloadButton.classList.remove('hidden');
 
@@ -792,18 +1010,46 @@ function renderResults(result) {
 
         row.className = 'result-row';
 
-        const thumb =
-            document.createElement('img');
+        const isVideoItem = file.mediaType === 'video' || isVideo(file.name);
 
-        thumb.className = 'result-thumb';
-        thumb.src = file.previewUrl || file.url;
-        thumb.alt = file.name;
+        const thumbWrapper =
+            document.createElement('div');
+        thumbWrapper.className = 'result-thumb-wrapper';
+
+        let thumb;
+        if (file.thumbUrl && !file.thumbUrl.endsWith('.mp4')) {
+            thumb = document.createElement('img');
+            thumb.className = 'result-thumb';
+            thumb.src = file.thumbUrl;
+            thumb.alt = file.name;
+        } else if (isVideoItem) {
+            thumb = document.createElement('video');
+            thumb.className = 'result-thumb result-video-thumb';
+            thumb.src = (file.previewUrl || file.url) + '#t=0.5';
+            thumb.preload = 'metadata';
+            thumb.muted = true;
+            thumb.playsInline = true;
+        } else {
+            thumb = document.createElement('img');
+            thumb.className = 'result-thumb';
+            thumb.src = file.previewUrl || file.url;
+            thumb.alt = file.name;
+        }
+
         thumb.title = 'Click to preview full size';
-
         thumb.addEventListener('click', (e) => {
             e.stopPropagation();
             openModal(file);
         });
+
+        thumbWrapper.appendChild(thumb);
+
+        if (isVideoItem) {
+            const badge = document.createElement('span');
+            badge.className = 'result-badge-type';
+            badge.textContent = '▶ VIDEO';
+            thumbWrapper.appendChild(badge);
+        }
 
         const checkbox =
             document.createElement('input');
@@ -824,11 +1070,11 @@ function renderResults(result) {
 
         link.className = 'result-download';
         link.href = file.url;
-        link.textContent = '↓ Download';
+        link.innerHTML = `${DOWNLOAD_ARROW_SMALL_SVG}<span>Download</span>`;
         link.download = file.name;
 
-        row.appendChild(thumb);
         row.appendChild(checkbox);
+        row.appendChild(thumbWrapper);
         row.appendChild(name);
         row.appendChild(link);
 
@@ -841,6 +1087,7 @@ function renderResults(result) {
         resultsList.appendChild(row);
     });
 
+    const isVideoResult = currentMediaMode === 'videos' || result.mediaType === 'video';
     const downloadAllUrl =
         result.downloadAllUrl ||
         result.downloadUrl;
@@ -849,14 +1096,21 @@ function renderResults(result) {
 
         downloadButton.href = downloadAllUrl;
 
-        downloadButton.textContent =
-            '↓  Download All (ZIP)';
+        downloadButton.innerHTML = isVideoResult
+            ? `${DOWNLOAD_ARROW_SVG}<span>Download All Videos (ZIP)</span>`
+            : `${DOWNLOAD_ARROW_SVG}<span>Download All (ZIP)</span>`;
 
         downloadButton.classList.remove('hidden');
 
     } else {
 
         downloadButton.classList.add('hidden');
+    }
+
+    if (againButton) {
+        againButton.textContent = isVideoResult
+            ? 'Process more videos'
+            : 'Process more images';
     }
 }
 
@@ -923,34 +1177,45 @@ downloadSelectedButton.onclick = () => {
 processButton.onclick =
     async function () {
 
-        if (selectedFiles.length === 0) {
+        const isVideoMode = currentMediaMode === 'videos';
+        const activeList = isVideoMode ? selectedVideos : selectedFiles;
+        const activeSession = isVideoMode ? activeVideoZipSession : activeZipSession;
+
+        if (activeList.length === 0 && !activeSession) {
             return;
         }
 
+        const isZipMode =
+            (activeList.length === 1 && isZip(activeList[0])) ||
+            Boolean(activeSession);
+
         showPanelState('processing');
 
-        const isZipMode =
-            selectedFiles.length === 1 &&
-            isZip(selectedFiles[0]);
+        const processingTitle = document.getElementById('processingTitle');
+        if (processingTitle) {
+            processingTitle.textContent = isVideoMode ? 'Processing your videos' : 'Processing your images';
+        }
 
         progressBar.style.width =
             '20%';
 
         progressText.textContent =
-            isZipMode
-                ? 'Uploading and extracting ZIP archive...'
-                : 'Uploading files...';
+            isVideoMode
+                ? (isZipMode ? 'Uploading and inspecting video archive...' : 'Uploading and preparing video...')
+                : (isZipMode ? 'Uploading and extracting ZIP archive...' : 'Uploading files...');
 
         const formData =
             new FormData();
 
-        if (activeZipSession && activeZipSession.inspectionId) {
+        formData.append('mediaMode', currentMediaMode);
+
+        if (activeSession && activeSession.inspectionId) {
             formData.append(
                 'inspectionId',
-                activeZipSession.inspectionId
+                activeSession.inspectionId
             );
         } else {
-            selectedFiles.forEach(
+            activeList.forEach(
                 file => {
 
                     formData.append(
@@ -967,9 +1232,11 @@ processButton.onclick =
                 '50%';
 
             progressText.textContent =
-                isZipMode
-                    ? 'Processing images from ZIP archive...'
-                    : 'Processing images...';
+                isVideoMode
+                    ? 'Encoding video stream with intelligent AI badge... (this may take a few moments)'
+                    : (isZipMode
+                        ? 'Processing images from ZIP archive...'
+                        : 'Processing images...');
 
             const response =
                 await fetch(
@@ -1002,14 +1269,21 @@ processButton.onclick =
                 );
             }
 
+            const isVideoResult = currentMediaMode === 'videos' || result.mediaType === 'video';
+            const unitSingular = isVideoResult ? 'video' : 'image';
+            const unitPlural = isVideoResult ? 'videos' : 'images';
+            const zipName = (activeList.length > 0 && activeList[0].name)
+                ? activeList[0].name
+                : (activeSession ? activeSession.zipName : 'ZIP archive');
+
             progressBar.style.width =
                 '100%';
 
             progressText.textContent =
                 `${result.processed} ${
                     result.processed === 1
-                        ? 'image'
-                        : 'images'
+                        ? unitSingular
+                        : unitPlural
                 } processed`;
 
             showPanelState('results');
@@ -1018,13 +1292,13 @@ processButton.onclick =
                 isZipMode
                     ? `${result.processed} ${
                         result.processed === 1
-                            ? 'image was'
-                            : 'images were'
-                    } processed from ${selectedFiles[0].name}.`
+                            ? `${unitSingular} was`
+                            : `${unitPlural} were`
+                    } processed from ${zipName}.`
                     : `${result.processed} ${
                         result.processed === 1
-                            ? 'image was'
-                            : 'images were'
+                            ? `${unitSingular} was`
+                            : `${unitPlural} were`
                     } processed successfully.`;
 
             renderResults(result);
@@ -1053,6 +1327,8 @@ againButton.onclick = () => {
 
     selectedFiles = [];
     activeZipSession = null;
+    selectedVideos = [];
+    activeVideoZipSession = null;
 
     renderFiles();
 

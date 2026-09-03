@@ -39,6 +39,13 @@ const BADGE_FILES = {
     light: 'light_bg_badge.png'
 };
 
+const BADGES = {
+    darkGreen: resolveBadgePath(BADGE_FILES.darkGreen),
+    electricGreen: resolveBadgePath(BADGE_FILES.electricGreen),
+    dark: resolveBadgePath(BADGE_FILES.dark),
+    light: resolveBadgePath(BADGE_FILES.light)
+};
+
 function getBadgePath(badgeType) {
     const fileName = BADGE_FILES[badgeType] || 'dark_bg_badge.png';
     return resolveBadgePath(fileName);
@@ -159,6 +166,9 @@ function getBadgeBuffer(badgeType) {
 }
 
 async function getBottomRightSample(inputPath, metadata) {
+    if (!metadata || !metadata.width || !metadata.height) {
+        metadata = await sharp(inputPath, SHARP_OPTIONS).metadata();
+    }
     const width = metadata.width;
     const height = metadata.height;
 
@@ -215,8 +225,8 @@ async function processImage(inputPath, outputPath) {
     const rightMargin = -Math.round(metadata.width * 0.015);
     const bottomMargin = -Math.round(metadata.height * 0.05);
 
-    const left = Math.max(0, Math.min(metadata.width - badgeInfo.width, metadata.width - badgeInfo.width - rightMargin));
-    const top = Math.max(0, Math.min(metadata.height - badgeInfo.height, metadata.height - badgeInfo.height - bottomMargin));
+    const left = Math.round(metadata.width - badgeInfo.width - rightMargin);
+    const top = Math.round(metadata.height - badgeInfo.height - bottomMargin);
 
     const outputImage = sharp(inputPath, SHARP_OPTIONS)
         .rotate()
@@ -264,5 +274,8 @@ async function processImage(inputPath, outputPath) {
 
 
 module.exports = {
-    processImage
+    processImage,
+    selectBadge,
+    getBottomRightSample,
+    BADGES
 };
