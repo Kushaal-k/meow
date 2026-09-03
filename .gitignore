@@ -39,6 +39,7 @@ Thumbs.db
 
 # Packaged application
 *.exe
+!bin/**/*.exe
 *.dmg
 *.pkg
 *.app

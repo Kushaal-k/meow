@@ -9,24 +9,67 @@ const { selectBadge, getBottomRightSample, BADGES } = require('./imageProcessor'
 const SUPPORTED_VIDEOS = ['.mp4', '.mov', '.webm', '.mkv', '.avi'];
 
 function resolveFfmpegPath() {
-    // Check if packaged with extraResources or system PATH
-    if (process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, 'ffmpeg'))) {
-        return path.join(process.resourcesPath, 'ffmpeg');
+    const isWin = process.platform === 'win32';
+    const binName = isWin ? 'ffmpeg.exe' : 'ffmpeg';
+
+    // 1. Check process.resourcesPath (packaged Electron app)
+    if (process.resourcesPath) {
+        const candidates = [
+            path.join(process.resourcesPath, 'bin', binName),
+            path.join(process.resourcesPath, binName),
+            path.join(process.resourcesPath, 'ffmpeg.exe'),
+            path.join(process.resourcesPath, 'ffmpeg')
+        ];
+        for (const p of candidates) {
+            if (fs.existsSync(p)) return p;
+        }
     }
-    if (process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, 'ffmpeg.exe'))) {
-        return path.join(process.resourcesPath, 'ffmpeg.exe');
+
+    // 2. Check local project bin/ folder (development / tests)
+    const archDir = process.arch === 'arm64' ? 'arm64' : 'x64';
+    const osDir = isWin ? 'win/x64' : `mac/${archDir}`;
+    const localCandidates = [
+        path.join(__dirname, '..', 'bin', osDir, binName),
+        path.join(__dirname, '..', 'bin', binName)
+    ];
+    for (const p of localCandidates) {
+        if (fs.existsSync(p)) return p;
     }
-    return 'ffmpeg';
+
+    // 3. Fallback to system PATH
+    return isWin ? 'ffmpeg.exe' : 'ffmpeg';
 }
 
 function resolveFfprobePath() {
-    if (process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, 'ffprobe'))) {
-        return path.join(process.resourcesPath, 'ffprobe');
+    const isWin = process.platform === 'win32';
+    const binName = isWin ? 'ffprobe.exe' : 'ffprobe';
+
+    // 1. Check process.resourcesPath (packaged Electron app)
+    if (process.resourcesPath) {
+        const candidates = [
+            path.join(process.resourcesPath, 'bin', binName),
+            path.join(process.resourcesPath, binName),
+            path.join(process.resourcesPath, 'ffprobe.exe'),
+            path.join(process.resourcesPath, 'ffprobe')
+        ];
+        for (const p of candidates) {
+            if (fs.existsSync(p)) return p;
+        }
     }
-    if (process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, 'ffprobe.exe'))) {
-        return path.join(process.resourcesPath, 'ffprobe.exe');
+
+    // 2. Check local project bin/ folder (development / tests)
+    const archDir = process.arch === 'arm64' ? 'arm64' : 'x64';
+    const osDir = isWin ? 'win/x64' : `mac/${archDir}`;
+    const localCandidates = [
+        path.join(__dirname, '..', 'bin', osDir, binName),
+        path.join(__dirname, '..', 'bin', binName)
+    ];
+    for (const p of localCandidates) {
+        if (fs.existsSync(p)) return p;
     }
-    return 'ffprobe';
+
+    // 3. Fallback to system PATH
+    return isWin ? 'ffprobe.exe' : 'ffprobe';
 }
 
 const FFMPEG_BIN = resolveFfmpegPath();
@@ -228,11 +271,49 @@ async function processVideo(
     const paddingRight = Math.round(width * 0.042);
     const paddingBottom = Math.round(height * 0.063);
 
-    // Badge entrance animation duration:
-    // Badge moves in from the right edge with a smooth fade-in and stays until the end of the video
-    const animDuration = Number((duration > 0 ? Math.min(0.8, Math.max(0.3, duration * 0.35)) : 0.8).toFixed(2));
+    // 6. Timing configuration for intro delay and outro buffer
+    // startOffset: seconds from start to hold off showing badge (skips intro brand screens)
+    // endOffset: seconds before end to hide badge (skips outro brand screens)
+    let startOffset = Math.max(0, parseFloat(options.startOffset) || 0);
+    let endOffset = Math.max(0, parseFloat(options.endOffset) || 0);
 
-    // 6. Overlay badge onto video using detected hardware encoder (with automatic CPU fallback)
+    // Clamp offsets against video duration to guarantee safe playback
+    if (duration > 0) {
+        if (startOffset >= duration) {
+            startOffset = Math.max(0, duration - 1);
+        }
+        if (startOffset + endOffset >= duration) {
+            endOffset = Math.max(0, duration - startOffset - 0.5);
+        }
+    }
+
+    const displayWindow = duration > 0 ? (duration - startOffset - endOffset) : 5;
+    const animDuration = Number(
+        (Math.min(0.8, Math.max(0.2, displayWindow > 0 ? displayWindow * 0.25 : 0.8))).toFixed(2)
+    );
+
+    const st = Number(startOffset.toFixed(2));
+    const et = Number((Math.max(st + animDuration, (duration || 5) - endOffset)).toFixed(2));
+    const hasExit = endOffset > 0 && (et - animDuration > st + animDuration);
+
+    const enterEnd = Number((st + animDuration).toFixed(2));
+    const exitStart = Number((et - animDuration).toFixed(2));
+
+    // Dynamic animation filters:
+    // If hasExit is true: badge slides in from right + fades in, rests, then slides out to right + fades out
+    // If hasExit is false: badge slides in from right + fades in, and stays till the end
+    let fadeFilter;
+    let xExpr;
+
+    if (hasExit) {
+        fadeFilter = `format=rgba,fade=t=in:st=${st}:d=${animDuration}:alpha=1,fade=t=out:st=${exitStart}:d=${animDuration}:alpha=1`;
+        xExpr = `W-(w+${paddingRight})*if(lt(t,${st}),0,if(lt(t,${enterEnd}),sin((t-${st})/${animDuration}*PI/2),if(lt(t,${exitStart}),1,if(lt(t,${et}),sin((${et}-t)/${animDuration}*PI/2),0))))`;
+    } else {
+        fadeFilter = `format=rgba,fade=t=in:st=${st}:d=${animDuration}:alpha=1`;
+        xExpr = `W-(w+${paddingRight})*if(lt(t,${st}),0,if(lt(t,${enterEnd}),sin((t-${st})/${animDuration}*PI/2),1))`;
+    }
+
+    // 7. Overlay badge onto video using detected hardware encoder (with automatic CPU fallback)
     const hwConfig = await getHardwareEncoderConfig();
 
     // Audio stream optimization: if original audio is already AAC, pass through untouched (0% CPU); otherwise encode to AAC
@@ -247,12 +328,7 @@ async function processVideo(
 
     const runEncode = (encoderArgs) => {
         return new Promise((resolve, reject) => {
-            // Badge animation:
-            // 1. Loop badge PNG via -loop 1 so frames stream continuously
-            // 2. format=rgba,fade=t=in:st=0:d=${animDuration}:alpha=1 fades in badge alpha from 0 to 1
-            // 3. overlay x starts at W (right edge) and eases into (W - w - paddingRight) using ease-out sin curve
-            // 4. shortest=1 terminates overlay cleanly when the base video stream ends
-            const filterGraph = `[0:v]pad=ceil(iw/2)*2:ceil(ih/2)*2[base];[1:v]format=rgba,fade=t=in:st=0:d=${animDuration}:alpha=1[badge];[base][badge]overlay=x='W-(w+${paddingRight})*sin(min(1,t/${animDuration})*PI/2)':y='H-h-${paddingBottom}':shortest=1,format=yuv420p[v]`;
+            const filterGraph = `[0:v]pad=ceil(iw/2)*2:ceil(ih/2)*2[base];[1:v]${fadeFilter}[badge];[base][badge]overlay=x='${xExpr}':y='H-h-${paddingBottom}':shortest=1,format=yuv420p[v]`;
 
             const args = [
                 '-i', inputPath,
@@ -326,7 +402,12 @@ async function processVideo(
     const thumbFileName = `${baseName}-ai-thumb.webp`;
     const thumbPath = path.join(targetDir, thumbFileName);
     try {
-        const thumbTime = duration > 1.2 ? 1.2 : Math.max(0, duration * 0.9);
+        let thumbTime;
+        if (hasExit) {
+            thumbTime = Number(((st + et) / 2).toFixed(2));
+        } else {
+            thumbTime = Number((Math.min(duration > 0 ? duration * 0.9 : 1.2, st + animDuration + 0.5)).toFixed(2));
+        }
         await extractVideoThumbnail(outputPath, thumbPath, thumbTime);
     } catch (tErr) {
         console.warn('Could not extract badged video thumbnail:', tErr.message);

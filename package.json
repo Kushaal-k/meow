@@ -1,6 +1,6 @@
 {
   "name": "ai-badge-studio",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Intelligent AI Badge watermarking & processing application",
   "main": "main.js",
   "author": "",
@@ -104,7 +104,16 @@
         "!node_modules/@img/sharp-libvips-linux-*/**/*"
       ],
       "icon": "assets/icon.ico",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "extraResources": [
+        {
+          "from": "bin/win/x64",
+          "to": "bin",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,

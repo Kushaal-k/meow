@@ -458,12 +458,33 @@ async function processImageUploads(
 
 
 // ============================================================
+// VIDEO TIMING RESOLUTION HELPER
+// ============================================================
+
+function resolveVideoTiming(itemIdentifier, index, videoTiming = {}) {
+    const globalTiming = videoTiming.global || {};
+    const perFile = videoTiming.perFile || {};
+    const custom = (itemIdentifier && perFile[itemIdentifier]) || (index !== undefined && perFile[index]) || null;
+    if (custom && (custom.startOffset !== undefined || custom.endOffset !== undefined)) {
+        return {
+            startOffset: parseFloat(custom.startOffset) || 0,
+            endOffset: parseFloat(custom.endOffset) || 0
+        };
+    }
+    return {
+        startOffset: parseFloat(globalTiming.startOffset) || 0,
+        endOffset: parseFloat(globalTiming.endOffset) || 0
+    };
+}
+
+// ============================================================
 // PROCESS NORMAL VIDEO UPLOADS
 // ============================================================
 
 async function processVideoUploads(
     files,
-    jobDirectory
+    jobDirectory,
+    videoTiming = {}
 ) {
 
     const outputDirectory =
@@ -490,11 +511,14 @@ async function processVideoUploads(
     const results = await mapConcurrent(
         validFiles,
         VIDEO_CONCURRENCY,
-        async (file) => {
+        async (file, index) => {
+            const timing = resolveVideoTiming(file.originalname, index, videoTiming);
             return await processVideo(
                 file.path,
                 file.originalname,
-                outputDirectory
+                outputDirectory,
+                '',
+                timing
             );
         }
     );
@@ -512,7 +536,8 @@ async function processVideoUploads(
 
 async function processZip(
     zipFile,
-    jobDirectory
+    jobDirectory,
+    videoTiming = {}
 ) {
 
     const extractDirectory =
@@ -628,13 +653,15 @@ async function processZip(
     const results = await mapConcurrent(
         filesToProcess,
         concurrency,
-        async (item) => {
+        async (item, index) => {
             if (item.isVideo) {
+                const timing = resolveVideoTiming(item.originalFileName, index, videoTiming);
                 return await processVideo(
                     item.sourcePath,
                     item.originalFileName,
                     outputDirectory,
-                    item.relativeDirectory
+                    item.relativeDirectory,
+                    timing
                 );
             } else if (item.isImage) {
                 return await processOneImage(
@@ -881,6 +908,22 @@ app.post(
         let jobDirectory;
 
         try {
+            // Parse video timing options (global defaults and per-file overrides)
+            let videoTiming = { global: {}, perFile: {} };
+            if (req.body && req.body.videoTimingGlobal) {
+                try {
+                    videoTiming.global = typeof req.body.videoTimingGlobal === 'string'
+                        ? JSON.parse(req.body.videoTimingGlobal)
+                        : req.body.videoTimingGlobal;
+                } catch (_) {}
+            }
+            if (req.body && req.body.videoTimingPerFile) {
+                try {
+                    videoTiming.perFile = typeof req.body.videoTimingPerFile === 'string'
+                        ? JSON.parse(req.body.videoTimingPerFile)
+                        : req.body.videoTimingPerFile;
+                } catch (_) {}
+            }
 
             // Case A: Processing an already-inspected ZIP session
             if (req.body && req.body.inspectionId) {
@@ -896,14 +939,16 @@ app.post(
                     const results = await mapConcurrent(
                         session.files,
                         concurrency,
-                        async (item) => {
+                        async (item, index) => {
                             const sourcePath = path.join(session.extractedDir, item.path);
                             if (isVideoSession) {
+                                const timing = resolveVideoTiming(item.name, index, videoTiming);
                                 return await processVideo(
                                     sourcePath,
                                     item.name,
                                     outputDirectory,
-                                    path.dirname(item.path) === '.' ? '' : path.dirname(item.path)
+                                    path.dirname(item.path) === '.' ? '' : path.dirname(item.path),
+                                    timing
                                 );
                             } else {
                                 return await processOneImage(
@@ -1020,7 +1065,8 @@ app.post(
                 const result =
                     await processZip(
                         zipFile,
-                        jobDirectory
+                        jobDirectory,
+                        videoTiming
                     );
 
                 const outputZip =
@@ -1106,7 +1152,8 @@ app.post(
             if (isVideoUpload) {
                 result = await processVideoUploads(
                     req.files,
-                    jobDirectory
+                    jobDirectory,
+                    videoTiming
                 );
             } else {
                 result = await processImageUploads(

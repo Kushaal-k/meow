@@ -582,6 +582,190 @@ async function addFiles(files) {
     renderFiles();
 }
 
+// State for per-video timing overrides
+let perVideoTimingState = {};
+
+function createVideoTimingElement(fileName, index) {
+    const globalStartInput = document.getElementById('globalStartOffset');
+    const globalEndInput = document.getElementById('globalEndOffset');
+    const globalStart = Math.max(0, parseFloat(globalStartInput ? globalStartInput.value : 0) || 0);
+    const globalEnd = Math.max(0, parseFloat(globalEndInput ? globalEndInput.value : 0) || 0);
+
+    const fileState = perVideoTimingState[fileName] || {
+        custom: false,
+        startOffset: globalStart,
+        endOffset: globalEnd,
+        expanded: false
+    };
+
+    const container = document.createElement('div');
+    container.className = 'file-timing-box';
+
+    let tagText = 'Default (0s / 0s)';
+    let tagClass = 'tag-default';
+    if (fileState.custom) {
+        tagText = `Custom: ${fileState.startOffset}s / -${fileState.endOffset}s`;
+        tagClass = 'tag-custom';
+    } else if (globalStart > 0 || globalEnd > 0) {
+        tagText = `Batch: ${globalStart}s / -${globalEnd}s`;
+        tagClass = 'tag-batch';
+    }
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = `file-timing-btn ${fileState.expanded ? 'is-open' : ''}`;
+    toggleBtn.innerHTML = `
+        <span class="file-timing-status ${tagClass}">
+            <svg class="file-timing-svg-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span class="file-timing-status-text">${tagText}</span>
+        </span>
+        <span class="timing-chevron-wrap">
+            <svg class="file-timing-chevron-svg" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+        </span>
+    `;
+
+    const drawer = document.createElement('div');
+    drawer.className = `file-timing-drawer ${fileState.expanded ? 'open' : ''}`;
+    drawer.innerHTML = `
+        <div class="drawer-toggle-row">
+            <label class="drawer-chk-label">
+                <input type="checkbox" class="drawer-chk" ${fileState.custom ? 'checked' : ''}>
+                <span class="drawer-chk-text">Custom for this video</span>
+            </label>
+        </div>
+        <div class="drawer-steppers ${fileState.custom ? '' : 'is-disabled'}">
+            <div class="file-stepper-row">
+                <div class="file-stepper-label">Intro Delay</div>
+                <div class="file-stepper-control">
+                    <button type="button" class="file-step-btn file-step-down" title="Decrease intro">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                    <div class="file-step-center">
+                        <input type="number" class="file-start-input" min="0" max="600" step="0.5" value="${fileState.custom ? fileState.startOffset : globalStart}" ${fileState.custom ? '' : 'disabled'}>
+                        <span class="file-step-unit">sec</span>
+                    </div>
+                    <button type="button" class="file-step-btn file-step-up" title="Increase intro">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="18 15 12 9 6 15"></polyline>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="file-stepper-row">
+                <div class="file-stepper-label">Outro Buffer</div>
+                <div class="file-stepper-control">
+                    <button type="button" class="file-step-btn file-step-down" title="Decrease outro">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                    <div class="file-step-center">
+                        <input type="number" class="file-end-input" min="0" max="600" step="0.5" value="${fileState.custom ? fileState.endOffset : globalEnd}" ${fileState.custom ? '' : 'disabled'}>
+                        <span class="file-step-unit">sec</span>
+                    </div>
+                    <button type="button" class="file-step-btn file-step-up" title="Increase outro">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="18 15 12 9 6 15"></polyline>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    toggleBtn.onclick = (e) => {
+        e.stopPropagation();
+        fileState.expanded = !fileState.expanded;
+        perVideoTimingState[fileName] = fileState;
+        drawer.classList.toggle('open', fileState.expanded);
+        toggleBtn.classList.toggle('is-open', fileState.expanded);
+    };
+
+    const chk = drawer.querySelector('.drawer-chk');
+    const steppersWrap = drawer.querySelector('.drawer-steppers');
+    const startInp = drawer.querySelector('.file-start-input');
+    const endInp = drawer.querySelector('.file-end-input');
+
+    const updateStatusTag = () => {
+        const tagEl = toggleBtn.querySelector('.file-timing-status');
+        const textEl = toggleBtn.querySelector('.file-timing-status-text');
+        if (fileState.custom) {
+            if (textEl) textEl.textContent = `Custom: ${fileState.startOffset}s / -${fileState.endOffset}s`;
+            if (tagEl) tagEl.className = 'file-timing-status tag-custom';
+        } else {
+            const bText = (globalStart > 0 || globalEnd > 0) ? `Batch: ${globalStart}s / -${globalEnd}s` : 'Default (0s / 0s)';
+            const bClass = (globalStart > 0 || globalEnd > 0) ? 'tag-batch' : 'tag-default';
+            if (textEl) textEl.textContent = bText;
+            if (tagEl) tagEl.className = `file-timing-status ${bClass}`;
+        }
+    };
+
+    chk.onchange = (e) => {
+        e.stopPropagation();
+        fileState.custom = chk.checked;
+        if (fileState.custom) {
+            fileState.startOffset = Math.max(0, parseFloat(startInp.value) || 0);
+            fileState.endOffset = Math.max(0, parseFloat(endInp.value) || 0);
+            steppersWrap.classList.remove('is-disabled');
+            startInp.disabled = false;
+            endInp.disabled = false;
+        } else {
+            steppersWrap.classList.add('is-disabled');
+            startInp.disabled = true;
+            endInp.disabled = true;
+            startInp.value = globalStart;
+            endInp.value = globalEnd;
+        }
+        updateStatusTag();
+        perVideoTimingState[fileName] = fileState;
+    };
+
+    startInp.oninput = (e) => {
+        e.stopPropagation();
+        if (fileState.custom) {
+            fileState.startOffset = Math.max(0, parseFloat(startInp.value) || 0);
+            updateStatusTag();
+            perVideoTimingState[fileName] = fileState;
+        }
+    };
+
+    endInp.oninput = (e) => {
+        e.stopPropagation();
+        if (fileState.custom) {
+            fileState.endOffset = Math.max(0, parseFloat(endInp.value) || 0);
+            updateStatusTag();
+            perVideoTimingState[fileName] = fileState;
+        }
+    };
+
+    // Connect SVG stepper arrow buttons for per-video controls
+    drawer.querySelectorAll('.file-step-btn').forEach(btn => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            if (!fileState.custom) return;
+            const isUp = btn.classList.contains('file-step-up');
+            const controlBox = btn.closest('.file-stepper-control');
+            const inp = controlBox ? controlBox.querySelector('input') : null;
+            if (!inp) return;
+            let val = parseFloat(inp.value) || 0;
+            val = isUp ? val + 0.5 : Math.max(0, val - 0.5);
+            inp.value = val;
+            inp.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+    });
+
+    container.appendChild(toggleBtn);
+    container.appendChild(drawer);
+    return container;
+}
+
 function renderFiles() {
 
     fileGrid.innerHTML = '';
@@ -589,6 +773,15 @@ function renderFiles() {
     const isVideoMode = currentMediaMode === 'videos';
     const activeList = isVideoMode ? selectedVideos : selectedFiles;
     const activeSession = isVideoMode ? activeVideoZipSession : activeZipSession;
+
+    const videoTimingSettings = document.getElementById('videoTimingSettings');
+    if (videoTimingSettings) {
+        if (isVideoMode && (activeList.length > 0 || activeSession)) {
+            videoTimingSettings.classList.remove('hidden');
+        } else {
+            videoTimingSettings.classList.add('hidden');
+        }
+    }
 
     if (activeList.length === 0 && !activeSession) {
 
@@ -659,6 +852,9 @@ function renderFiles() {
                 card.appendChild(preview);
                 card.appendChild(name);
                 card.appendChild(size);
+                if (isVideoMode) {
+                    card.appendChild(createVideoTimingElement(file.name, index));
+                }
                 card.appendChild(remove);
 
                 fileGrid.appendChild(card);
@@ -696,7 +892,7 @@ function renderFiles() {
                 } else {
                     preview = document.createElement('div');
                     preview.className = 'file-preview file-preview-zip';
-                    preview.innerHTML = '<span style="font-size: 32px;">🎬</span><span style="font-size: 10px; font-weight: 700; margin-top: 5px;">VIDEO</span>';
+                    preview.innerHTML = '<svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.9;"><rect x="2" y="4" width="20" height="16" rx="3"></rect><path d="M7 4v16"></path><path d="M17 4v16"></path><path d="M2 12h20"></path></svg><span style="font-size: 11px; font-weight: 800; letter-spacing: 0.6px; margin-top: 6px;">VIDEO</span>';
                 }
             } else {
                 preview = document.createElement('img');
@@ -755,6 +951,9 @@ function renderFiles() {
 
             card.appendChild(name);
             card.appendChild(size);
+            if (isVideoMode) {
+                card.appendChild(createVideoTimingElement(file.name, index));
+            }
             card.appendChild(remove);
 
             fileGrid.appendChild(card);
@@ -825,6 +1024,7 @@ clearButton.onclick = () => {
     if (currentMediaMode === 'videos') {
         selectedVideos = [];
         activeVideoZipSession = null;
+        perVideoTimingState = {};
     } else {
         selectedFiles = [];
         activeZipSession = null;
@@ -832,6 +1032,60 @@ clearButton.onclick = () => {
 
     renderFiles();
 };
+
+// Global video timing controls & listeners
+const globalStartOffset = document.getElementById('globalStartOffset');
+const globalEndOffset = document.getElementById('globalEndOffset');
+const resetTimingBtn = document.getElementById('resetTimingBtn');
+
+if (globalStartOffset && globalEndOffset) {
+    const updateBatchBadges = () => {
+        const gStart = Math.max(0, parseFloat(globalStartOffset.value) || 0);
+        const gEnd = Math.max(0, parseFloat(globalEndOffset.value) || 0);
+        document.querySelectorAll('.file-card').forEach(card => {
+            const statusTag = card.querySelector('.file-timing-status');
+            if (statusTag && !statusTag.classList.contains('tag-custom')) {
+                if (gStart > 0 || gEnd > 0) {
+                    statusTag.textContent = `Batch: ${gStart}s / -${gEnd}s`;
+                    statusTag.className = 'file-timing-status tag-batch';
+                } else {
+                    statusTag.textContent = 'Default (0s / 0s)';
+                    statusTag.className = 'file-timing-status tag-default';
+                }
+                const startInp = card.querySelector('.file-start-input');
+                const endInp = card.querySelector('.file-end-input');
+                if (startInp && startInp.disabled) startInp.value = gStart;
+                if (endInp && endInp.disabled) endInp.value = gEnd;
+            }
+        });
+    };
+    globalStartOffset.addEventListener('input', updateBatchBadges);
+    globalEndOffset.addEventListener('input', updateBatchBadges);
+}
+
+if (resetTimingBtn) {
+    resetTimingBtn.addEventListener('click', () => {
+        if (globalStartOffset) globalStartOffset.value = 0;
+        if (globalEndOffset) globalEndOffset.value = 0;
+        perVideoTimingState = {};
+        renderFiles();
+    });
+}
+
+// Connect SVG stepper arrows for global/batch controls
+document.querySelectorAll('.stepper-arrow-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetId = btn.dataset.target;
+        const targetInput = document.getElementById(targetId);
+        if (!targetInput) return;
+        const isUp = btn.classList.contains('stepper-up');
+        let val = parseFloat(targetInput.value) || 0;
+        val = isUp ? val + 0.5 : Math.max(0, val - 0.5);
+        targetInput.value = val;
+        targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+});
 
 let currentView = 'card';
 
@@ -1208,6 +1462,23 @@ processButton.onclick =
             new FormData();
 
         formData.append('mediaMode', currentMediaMode);
+
+        if (isVideoMode) {
+            const gStart = Math.max(0, parseFloat(document.getElementById('globalStartOffset')?.value) || 0);
+            const gEnd = Math.max(0, parseFloat(document.getElementById('globalEndOffset')?.value) || 0);
+            formData.append('videoTimingGlobal', JSON.stringify({ startOffset: gStart, endOffset: gEnd }));
+
+            const perFileTiming = {};
+            for (const [fName, state] of Object.entries(perVideoTimingState)) {
+                if (state && state.custom) {
+                    perFileTiming[fName] = {
+                        startOffset: Math.max(0, parseFloat(state.startOffset) || 0),
+                        endOffset: Math.max(0, parseFloat(state.endOffset) || 0)
+                    };
+                }
+            }
+            formData.append('videoTimingPerFile', JSON.stringify(perFileTiming));
+        }
 
         if (activeSession && activeSession.inspectionId) {
             formData.append(

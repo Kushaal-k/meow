@@ -839,6 +839,470 @@ body.is-resizing #layoutResizer * {
     color: var(--primary-btn-text);
 }
 
+/* ============================================================
+   VIDEO BRAND TIMING SETTINGS (MINIMAL & USABLE)
+   ============================================================ */
+
+/* Hide native browser number input spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.video-timing-card {
+    margin-bottom: 20px;
+    padding: 16px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+    transition: all 0.2s ease;
+}
+
+[data-theme="dark"] .video-timing-card {
+    background: var(--surface-elevated);
+    border-color: var(--border);
+}
+
+.video-timing-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.video-timing-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.video-timing-head-svg {
+    color: var(--primary);
+    flex-shrink: 0;
+}
+
+[data-theme="dark"] .video-timing-head-svg {
+    color: var(--secondary);
+}
+
+.video-timing-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text-heading);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.video-timing-badge {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 6px;
+    background: rgba(14, 58, 47, 0.08);
+    color: var(--primary);
+    letter-spacing: 0.2px;
+}
+
+[data-theme="dark"] .video-timing-badge {
+    background: rgba(120, 250, 174, 0.14);
+    color: var(--secondary);
+}
+
+.timing-reset-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-hover);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+[data-theme="dark"] .timing-reset-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--muted-light);
+}
+
+.timing-reset-btn:hover {
+    color: var(--text-heading);
+    border-color: var(--secondary);
+    background: rgba(120, 250, 174, 0.12);
+}
+
+.video-timing-desc {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin: 0 0 14px 0;
+    line-height: 1.4;
+}
+
+.video-timing-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+@media (max-width: 600px) {
+    .video-timing-controls {
+        grid-template-columns: 1fr;
+    }
+}
+
+.timing-control-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.timing-control-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-heading);
+}
+
+.timing-label-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.timing-label-dot.dot-start {
+    background: var(--secondary);
+    box-shadow: 0 0 6px rgba(120, 250, 174, 0.5);
+}
+
+.timing-label-dot.dot-end {
+    background: #ffa868;
+    box-shadow: 0 0 6px rgba(255, 168, 104, 0.5);
+}
+
+.timing-sublabel {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--muted);
+}
+
+.stepper-wrap {
+    display: flex;
+    align-items: center;
+    background: var(--surface-hover);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stepper-wrap:focus-within {
+    border-color: var(--secondary);
+    background: var(--surface);
+    box-shadow: 0 0 0 2px rgba(120, 250, 174, 0.2);
+}
+
+.stepper-arrow-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.stepper-arrow-btn:hover {
+    background: rgba(14, 58, 47, 0.08);
+    color: var(--text-heading);
+}
+
+[data-theme="dark"] .stepper-arrow-btn:hover {
+    background: rgba(120, 250, 174, 0.15);
+    color: var(--secondary);
+}
+
+.stepper-input-box {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+}
+
+.stepper-input-box input {
+    width: 36px;
+    text-align: center;
+    border: none;
+    background: transparent;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text-heading);
+    outline: none;
+    padding: 0;
+}
+
+.stepper-unit {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted);
+    user-select: none;
+}
+
+/* ============================================================
+   PER-CARD TIMING ACCORDION & BADGE
+   ============================================================ */
+
+.file-timing-box {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-light);
+}
+
+.file-timing-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 6px 8px;
+    background: var(--surface-hover);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
+}
+
+.file-timing-btn:hover {
+    border-color: var(--secondary);
+    background: rgba(120, 250, 174, 0.08);
+}
+
+.file-timing-status {
+    flex: 1;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: left;
+}
+
+.file-timing-svg-icon {
+    flex-shrink: 0;
+}
+
+.file-timing-status.tag-default {
+    color: var(--muted);
+}
+
+.file-timing-status.tag-batch {
+    color: var(--primary);
+}
+
+[data-theme="dark"] .file-timing-status.tag-batch {
+    color: var(--secondary);
+}
+
+.file-timing-status.tag-custom {
+    color: var(--secondary-dark);
+    font-weight: 800;
+}
+
+[data-theme="dark"] .file-timing-status.tag-custom {
+    color: var(--secondary);
+}
+
+.file-timing-status-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.timing-chevron-wrap {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    color: var(--muted);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.file-timing-btn.is-open .timing-chevron-wrap {
+    transform: rotate(180deg);
+}
+
+.file-timing-drawer {
+    display: none;
+    margin-top: 6px;
+    padding: 8px;
+    background: var(--surface-hover);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    animation: fadeInDrawer 0.15s ease;
+}
+
+.file-timing-drawer.open {
+    display: block;
+}
+
+@keyframes fadeInDrawer {
+    from { opacity: 0; transform: translateY(-3px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.drawer-toggle-row {
+    margin-bottom: 7px;
+}
+
+.drawer-chk-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.drawer-chk-label input[type="checkbox"] {
+    width: 13px;
+    height: 13px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+[data-theme="dark"] .drawer-chk-label input[type="checkbox"] {
+    accent-color: var(--secondary);
+}
+
+.drawer-chk-text {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-heading);
+}
+
+.drawer-steppers {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: opacity 0.2s ease;
+}
+
+.drawer-steppers.is-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+.file-stepper-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+}
+
+.file-stepper-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.file-stepper-control {
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 4px;
+    transition: border-color 0.15s ease;
+}
+
+.file-stepper-control:focus-within {
+    border-color: var(--secondary);
+}
+
+.file-step-btn {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.file-step-btn:hover {
+    background: rgba(14, 58, 47, 0.08);
+    color: var(--text-heading);
+}
+
+[data-theme="dark"] .file-step-btn:hover {
+    background: rgba(120, 250, 174, 0.15);
+    color: var(--secondary);
+}
+
+.file-step-center {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+}
+
+.file-step-center input {
+    width: 32px;
+    text-align: center;
+    border: none;
+    background: transparent;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-heading);
+    outline: none;
+    padding: 0;
+}
+
+.file-step-unit {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted);
+    user-select: none;
+}
+
 .process-button {
     width: 100%;
     margin-top: 25px;

@@ -212,6 +212,79 @@
                     </div>
 
 
+                    <!-- Video Brand Timing Controls (Visible in Video Mode) -->
+                    <div id="videoTimingSettings" class="video-timing-card hidden">
+                        <div class="video-timing-header">
+                            <div class="video-timing-title-wrap">
+                                <svg class="video-timing-head-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                                <div class="video-timing-title">
+                                    Brand Screen Badge Timing
+                                    <span class="video-timing-badge">All Videos</span>
+                                </div>
+                            </div>
+                            <button id="resetTimingBtn" class="timing-reset-btn" type="button" title="Reset all timing to 0s">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                                    <path d="M3 3v5h5"></path>
+                                </svg>
+                                <span>Reset</span>
+                            </button>
+                        </div>
+                        <p class="video-timing-desc">Hides the badge during brand intro and outro screens across all videos. Can be customized per video below.</p>
+                        <div class="video-timing-controls">
+                            <div class="timing-control-item">
+                                <div class="timing-control-label">
+                                   
+                                    <span class="timing-label-text">Intro Delay</span>
+                                    <span class="timing-sublabel">(from start)</span>
+                                </div>
+                                <div class="stepper-wrap">
+                                    <button type="button" class="stepper-arrow-btn stepper-down" data-target="globalStartOffset" title="Decrease intro delay">
+                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                            <polyline points="6 9 12 15 18 9"></polyline>
+                                        </svg>
+                                    </button>
+                                    <div class="stepper-input-box">
+                                        <input type="number" id="globalStartOffset" min="0" max="600" step="0.5" value="0" placeholder="0">
+                                        <span class="stepper-unit">sec</span>
+                                    </div>
+                                    <button type="button" class="stepper-arrow-btn stepper-up" data-target="globalStartOffset" title="Increase intro delay">
+                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                            <polyline points="18 15 12 9 6 15"></polyline>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="timing-control-item">
+                                <div class="timing-control-label">
+                                   
+                                    <span class="timing-label-text">Outro Buffer</span>
+                                    <span class="timing-sublabel">(before end)</span>
+                                </div>
+                                <div class="stepper-wrap">
+                                    <button type="button" class="stepper-arrow-btn stepper-down" data-target="globalEndOffset" title="Decrease outro buffer">
+                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                            <polyline points="6 9 12 15 18 9"></polyline>
+                                        </svg>
+                                    </button>
+                                    <div class="stepper-input-box">
+                                        <input type="number" id="globalEndOffset" min="0" max="600" step="0.5" value="0" placeholder="0">
+                                        <span class="stepper-unit">sec</span>
+                                    </div>
+                                    <button type="button" class="stepper-arrow-btn stepper-up" data-target="globalEndOffset" title="Increase outro buffer">
+                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                            <polyline points="18 15 12 9 6 15"></polyline>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
                     <div
                         id="fileGrid"
                         class="file-grid"
