@@ -131,6 +131,7 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e)
 applyTheme(document.documentElement.getAttribute('data-theme') || getPreferredTheme());
 
 let selectedFiles = [];
+let activeZipSession = null;
 
 const supportedExtensions = [
     '.jpg',
@@ -182,7 +183,11 @@ function formatSize(bytes) {
         return `${(bytes / 1024).toFixed(1)} KB`;
     }
 
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (bytes < 1024 * 1024 * 1024) {
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 
@@ -303,36 +308,114 @@ function showPanelState(state) {
 // FILE SELECTION
 // ============================================================
 
-function addFiles(files) {
+async function inspectZipFile(zipFile) {
+    fileGrid.innerHTML = `
+        <div class="zip-inspecting-state" style="grid-column: 1 / -1; text-align: center; padding: 40px 20px; background: rgba(120, 250, 174, 0.05); border: 1px dashed var(--secondary); border-radius: 12px;">
+            <div style="font-size: 38px; line-height: 1;">📦</div>
+            <div style="margin-top: 14px; font-weight: 700; font-size: 15px; color: var(--secondary);">Inspecting ZIP Archive...</div>
+            <div style="margin-top: 6px; font-size: 13px; color: var(--text-heading); font-weight: 600;">${zipFile.name} (${formatSize(zipFile.size)})</div>
+            <div style="margin-top: 4px; font-size: 12px; color: var(--muted);">Extracting image previews before processing...</div>
+        </div>
+    `;
+    filesSection.classList.remove('hidden');
+    setSplit(true);
+    fileCount.textContent = 'Reading ZIP contents...';
+
+    try {
+        let response;
+        if (zipFile.path) {
+            // Electron mode: instant local inspection via path
+            response = await fetch('/api/inspect-zip', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filePath: zipFile.path })
+            });
+        } else {
+            // Web mode: send formData
+            const fd = new FormData();
+            fd.append('zipFile', zipFile);
+            response = await fetch('/api/inspect-zip', {
+                method: 'POST',
+                body: fd
+            });
+        }
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to inspect ZIP archive');
+        }
+
+        activeZipSession = data;
+        selectedFiles = [zipFile];
+        renderFiles();
+
+    } catch (err) {
+        console.error(err);
+        alert(`Could not preview ZIP images: ${err.message}`);
+        activeZipSession = null;
+        selectedFiles = [zipFile];
+        renderFiles();
+    }
+}
+
+async function addFiles(files) {
 
     const incoming =
         Array.from(files);
 
-    const zip =
-        incoming.find(isZip);
+    const zipFiles =
+        incoming.filter(isZip);
 
-    if (zip) {
-
-        alert(
-            'ZIP processing will be added next. For now, please select image files.'
-        );
-
+    if (zipFiles.length > 1) {
+        alert('Please select only one ZIP archive at a time.');
         return;
+    }
+
+    if (zipFiles.length === 1) {
+        const zip = zipFiles[0];
+        const MAX_ZIP_BYTES = 5 * 1024 * 1024 * 1024; // 5GB
+        if (zip.size > MAX_ZIP_BYTES) {
+            alert('ZIP file is too large. Maximum allowed size is 5GB.');
+            return;
+        }
+
+        if (incoming.length > 1 || selectedFiles.length > 0) {
+            alert('Please select either a single ZIP file or individual images. Loading images from the ZIP archive.');
+        }
+
+        await inspectZipFile(zip);
+        return;
+    }
+
+    // Normal images mode: if a ZIP was previously selected, clear it
+    if (activeZipSession || selectedFiles.some(isZip)) {
+        activeZipSession = null;
+        selectedFiles = [];
     }
 
     const images =
         incoming.filter(isImage);
 
     if (images.length === 0) {
-
         alert(
-            'Please select supported image files.'
+            'Please select supported image files (.jpg, .jpeg, .png, .webp, etc.) or a .zip file.'
         );
-
         return;
     }
 
-    selectedFiles.push(...images);
+    const MAX_FILES = 250;
+
+    if (selectedFiles.length + images.length > MAX_FILES) {
+        const allowed = MAX_FILES - selectedFiles.length;
+        if (allowed <= 0) {
+            alert(`Maximum limit of ${MAX_FILES} images reached. You already have ${MAX_FILES} images selected.`);
+            return;
+        }
+        alert(`You can process up to ${MAX_FILES} images at a time. Only the first ${allowed} of your ${images.length} selected images were added.`);
+        selectedFiles.push(...images.slice(0, allowed));
+    } else {
+        selectedFiles.push(...images);
+    }
 
     renderFiles();
 }
@@ -341,7 +424,7 @@ function renderFiles() {
 
     fileGrid.innerHTML = '';
 
-    if (selectedFiles.length === 0) {
+    if (selectedFiles.length === 0 && !activeZipSession) {
 
         filesSection.classList.add(
             'hidden'
@@ -358,6 +441,63 @@ function renderFiles() {
 
     setSplit(true);
 
+    // Render ZIP image previews before processing
+    if (activeZipSession && activeZipSession.files) {
+
+        fileCount.textContent =
+            `${activeZipSession.files.length} images found in ${activeZipSession.zipName}`;
+
+        activeZipSession.files.forEach(
+            (file, index) => {
+
+                const card =
+                    document.createElement('div');
+                card.className = 'file-card';
+
+                const preview =
+                    document.createElement('img');
+                preview.className = 'file-preview';
+                preview.src = file.thumbUrl;
+                preview.alt = file.name;
+
+                const name =
+                    document.createElement('div');
+                name.className = 'file-name';
+                name.textContent = file.name;
+
+                const size =
+                    document.createElement('div');
+                size.className = 'file-size';
+                size.textContent = `${formatSize(file.size)} · ZIP`;
+
+                const remove =
+                    document.createElement('button');
+                remove.className = 'remove-file';
+                remove.textContent = '×';
+                remove.title = 'Remove this image from processing';
+                remove.onclick = (e) => {
+                    e.stopPropagation();
+                    activeZipSession.files.splice(index, 1);
+                    if (activeZipSession.files.length === 0) {
+                        activeZipSession = null;
+                        selectedFiles = [];
+                    }
+                    renderFiles();
+                };
+
+                card.appendChild(preview);
+                card.appendChild(name);
+                card.appendChild(size);
+                card.appendChild(remove);
+
+                fileGrid.appendChild(card);
+            }
+        );
+
+        return;
+    }
+
+    // Render normal individual image files
     fileCount.textContent =
         `${selectedFiles.length} ${
             selectedFiles.length === 1
@@ -386,6 +526,12 @@ function renderFiles() {
 
             preview.src =
                 URL.createObjectURL(file);
+
+            preview.alt = file.name;
+
+            card.appendChild(
+                preview
+            );
 
             const name =
                 document.createElement(
@@ -419,7 +565,8 @@ function renderFiles() {
 
             remove.textContent = '×';
 
-            remove.onclick = () => {
+            remove.onclick = (e) => {
+                e.stopPropagation();
 
                 selectedFiles.splice(
                     index,
@@ -429,7 +576,6 @@ function renderFiles() {
                 renderFiles();
             };
 
-            card.appendChild(preview);
             card.appendChild(name);
             card.appendChild(size);
             card.appendChild(remove);
@@ -500,6 +646,7 @@ dropZone.addEventListener(
 clearButton.onclick = () => {
 
     selectedFiles = [];
+    activeZipSession = null;
 
     renderFiles();
 };
@@ -782,32 +929,47 @@ processButton.onclick =
 
         showPanelState('processing');
 
+        const isZipMode =
+            selectedFiles.length === 1 &&
+            isZip(selectedFiles[0]);
+
         progressBar.style.width =
-            '10%';
+            '20%';
 
         progressText.textContent =
-            'Uploading files...';
+            isZipMode
+                ? 'Uploading and extracting ZIP archive...'
+                : 'Uploading files...';
 
         const formData =
             new FormData();
 
-        selectedFiles.forEach(
-            file => {
+        if (activeZipSession && activeZipSession.inspectionId) {
+            formData.append(
+                'inspectionId',
+                activeZipSession.inspectionId
+            );
+        } else {
+            selectedFiles.forEach(
+                file => {
 
-                formData.append(
-                    'files',
-                    file
-                );
-            }
-        );
+                    formData.append(
+                        'files',
+                        file
+                    );
+                }
+            );
+        }
 
         try {
 
             progressBar.style.width =
-                '30%';
+                '50%';
 
             progressText.textContent =
-                'Processing images...';
+                isZipMode
+                    ? 'Processing images from ZIP archive...'
+                    : 'Processing images...';
 
             const response =
                 await fetch(
@@ -818,11 +980,22 @@ processButton.onclick =
                     }
                 );
 
-            const result =
-                await response.json();
+            const rawText = await response.text();
+            let result;
+
+            try {
+                result = JSON.parse(rawText);
+            } catch (jsonErr) {
+                console.error('Non-JSON server response:', rawText);
+                const cleanError = rawText
+                    .replace(/<[^>]*>/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .slice(0, 160);
+                throw new Error(cleanError || `Server returned error (${response.status})`);
+            }
 
             if (!response.ok) {
-
                 throw new Error(
                     result.error ||
                     'Processing failed'
@@ -842,11 +1015,17 @@ processButton.onclick =
             showPanelState('results');
 
             successText.textContent =
-                `${result.processed} ${
-                    result.processed === 1
-                        ? 'image was'
-                        : 'images were'
-                } processed successfully.`;
+                isZipMode
+                    ? `${result.processed} ${
+                        result.processed === 1
+                            ? 'image was'
+                            : 'images were'
+                    } processed from ${selectedFiles[0].name}.`
+                    : `${result.processed} ${
+                        result.processed === 1
+                            ? 'image was'
+                            : 'images were'
+                    } processed successfully.`;
 
             renderResults(result);
 
@@ -873,6 +1052,7 @@ processButton.onclick =
 againButton.onclick = () => {
 
     selectedFiles = [];
+    activeZipSession = null;
 
     renderFiles();
 

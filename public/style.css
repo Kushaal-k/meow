@@ -700,6 +700,17 @@ body.is-resizing #layoutResizer * {
     background: var(--accent-light);
 }
 
+.file-preview-zip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(120, 250, 174, 0.12);
+    border: 1px dashed var(--secondary);
+    color: var(--secondary);
+    user-select: none;
+}
+
 .file-name {
     margin-top: 9px;
 

@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const archiver = require('archiver');
 const unzipper = require('unzipper');
+const sharp = require('sharp');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
@@ -14,27 +15,46 @@ const { processImage } = require('./src/imageProcessor');
 const app = express();
 
 const PORT = 3000;
+const MAX_FILES = 250;
+const CONCURRENCY = Math.max(2, Math.min(8, os.cpus().length || 4));
 
 const TEMP_ROOT = path.join(
     os.tmpdir(),
     'ai-badge-studio'
 );
 
-fs.mkdirSync(TEMP_ROOT, {
+const UPLOADS_DIR = path.join(
+    TEMP_ROOT,
+    'uploads'
+);
+
+fs.mkdirSync(UPLOADS_DIR, {
     recursive: true
 });
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB
+
 const upload = multer({
-    dest: path.join(
-        TEMP_ROOT,
-        'uploads'
-    ),
+    dest: UPLOADS_DIR,
 
     limits: {
-        files: 500,
-        fileSize: 500 * 1024 * 1024
+        files: MAX_FILES,
+        fileSize: MAX_FILE_SIZE
     }
 });
+
+async function mapConcurrent(items, concurrencyLimit, asyncFn) {
+    const results = new Array(items.length);
+    let currentIndex = 0;
+    const workers = new Array(Math.min(items.length, concurrencyLimit)).fill(0).map(async () => {
+        while (currentIndex < items.length) {
+            const idx = currentIndex++;
+            results[idx] = await asyncFn(items[idx], idx);
+        }
+    });
+    await Promise.all(workers);
+    return results;
+}
 
 function resolveStaticPath(folderName) {
     if (process.resourcesPath && fs.existsSync(path.join(process.resourcesPath, folderName))) {
@@ -45,6 +65,9 @@ function resolveStaticPath(folderName) {
     }
     return path.join(__dirname, folderName);
 }
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 app.use(
     express.static(
@@ -257,8 +280,9 @@ function createZip(
                 archiver(
                     'zip',
                     {
+                        forceZip64: true,
                         zlib: {
-                            level: 9
+                            level: 6
                         }
                     }
                 );
@@ -392,29 +416,25 @@ async function processImageUploads(
         }
     );
 
-    const results = [];
+    const validFiles = files.filter(file => isImage(file.originalname));
 
-    for (const file of files) {
+    if (validFiles.length > MAX_FILES) {
+        throw new Error(
+            `Maximum limit is ${MAX_FILES} images at a time. Received ${validFiles.length} images.`
+        );
+    }
 
-        if (!isImage(file.originalname)) {
-
-            console.log(
-                'Skipping unsupported file:',
-                file.originalname
-            );
-
-            continue;
-        }
-
-        const result =
-            await processOneImage(
+    const results = await mapConcurrent(
+        validFiles,
+        CONCURRENCY,
+        async (file) => {
+            return await processOneImage(
                 file.path,
                 file.originalname,
                 outputDirectory
             );
-
-        results.push(result);
-    }
+        }
+    );
 
     return {
         outputDirectory,
@@ -464,132 +484,275 @@ async function processZip(
         zipFile.originalname
     );
 
-    const directory =
-        await unzipper.Open.file(
-            zipFile.path
-        );
-
-    const results = [];
-
-    for (const entry of directory.files) {
-
-        const zipPath =
-            safeZipPath(entry.path);
-
-        /*
-         * Ignore directories.
-         */
-        if (
-            entry.type === 'Directory' ||
-            zipPath.endsWith('/')
-        ) {
-            continue;
-        }
-
-        const extension =
-            path.extname(zipPath)
-                .toLowerCase();
-
-        const relativeDirectory =
-            path.dirname(zipPath);
-
-        const originalFileName =
-            path.basename(zipPath);
-
-        const sourcePath =
-            path.join(
-                extractDirectory,
-                zipPath
-            );
-
-        fs.mkdirSync(
-            path.dirname(sourcePath),
-            {
-                recursive: true
-            }
-        );
-
-        /*
-         * Extract the original file.
-         */
-        await new Promise(
-            (resolve, reject) => {
-
-                entry.stream()
-                    .pipe(
-                        fs.createWriteStream(
-                            sourcePath
-                        )
-                    )
-                    .on(
-                        'finish',
-                        resolve
-                    )
-                    .on(
-                        'error',
-                        reject
-                    );
-            }
-        );
-
-        /*
-         * Process supported images.
-         */
-        if (
-            SUPPORTED_IMAGES.includes(
-                extension
-            )
-        ) {
-
-            const result =
-                await processOneImage(
-                    sourcePath,
-                    originalFileName,
-                    outputDirectory,
-                    relativeDirectory === '.'
-                        ? ''
-                        : relativeDirectory
-                );
-
-            results.push(result);
-
-        } else {
-
-            /*
-             * Non-image files are copied unchanged.
-             */
-            const targetPath =
-                path.join(
-                    outputDirectory,
-                    zipPath
-                );
-
-            fs.mkdirSync(
-                path.dirname(targetPath),
-                {
-                    recursive: true
-                }
-            );
-
-            fs.copyFileSync(
-                sourcePath,
-                targetPath
-            );
-
-            results.push({
-                name: originalFileName,
-                path: targetPath,
-                relativePath: zipPath,
-                unchanged: true
-            });
-        }
+    let directory;
+    try {
+        directory = await unzipper.Open.file(zipFile.path);
+    } catch (zipErr) {
+        throw new Error('Unable to read ZIP file. It may be corrupt or encrypted.');
     }
+
+    const validEntries = directory.files.filter(entry => {
+        const zipPath = safeZipPath(entry.path);
+        return entry.type !== 'Directory' && !zipPath.endsWith('/');
+    });
+
+    const MAX_ZIP_ENTRIES = 500;
+    if (validEntries.length > MAX_ZIP_ENTRIES) {
+        throw new Error(
+            `The uploaded ZIP contains ${validEntries.length} files. The maximum allowed limit is ${MAX_ZIP_ENTRIES} files.`
+        );
+    }
+
+    const imageEntries = validEntries.filter(entry => {
+        const ext = path.extname(safeZipPath(entry.path)).toLowerCase();
+        return SUPPORTED_IMAGES.includes(ext);
+    });
+
+    if (imageEntries.length === 0) {
+        throw new Error(
+            'No supported image files (.jpg, .jpeg, .png, .webp, etc.) were found inside the ZIP archive.'
+        );
+    }
+
+    if (imageEntries.length > MAX_FILES) {
+        throw new Error(
+            `The uploaded ZIP contains ${imageEntries.length} images. The maximum allowed limit is ${MAX_FILES} images.`
+        );
+    }
+
+    // Extract files sequentially to prevent unzipper file descriptor collisions
+    const filesToProcess = [];
+    for (const entry of validEntries) {
+        const zipPath = safeZipPath(entry.path);
+        const sourcePath = path.join(extractDirectory, zipPath);
+        fs.mkdirSync(path.dirname(sourcePath), { recursive: true });
+
+        await new Promise((resolve, reject) => {
+            entry.stream()
+                .pipe(fs.createWriteStream(sourcePath))
+                .on('finish', resolve)
+                .on('error', reject);
+        });
+
+        const extension = path.extname(zipPath).toLowerCase();
+        filesToProcess.push({
+            zipPath,
+            sourcePath,
+            originalFileName: path.basename(zipPath),
+            relativeDirectory: path.dirname(zipPath) === '.' ? '' : path.dirname(zipPath),
+            isImage: SUPPORTED_IMAGES.includes(extension)
+        });
+    }
+
+    // Process extracted images in parallel using worker pool
+    const results = await mapConcurrent(
+        filesToProcess,
+        CONCURRENCY,
+        async (item) => {
+            if (item.isImage) {
+                return await processOneImage(
+                    item.sourcePath,
+                    item.originalFileName,
+                    outputDirectory,
+                    item.relativeDirectory
+                );
+            } else {
+                const targetPath = path.join(outputDirectory, item.zipPath);
+                fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+                fs.copyFileSync(item.sourcePath, targetPath);
+                return {
+                    name: item.originalFileName,
+                    path: targetPath,
+                    relativePath: item.zipPath,
+                    unchanged: true
+                };
+            }
+        }
+    );
 
     return {
         outputDirectory,
         results
     };
 }
+
+
+// ============================================================
+// ZIP INSPECTION (PRE-PROCESSING PREVIEWS)
+// ============================================================
+
+const zipInspectionStore = new Map();
+
+app.post('/api/inspect-zip', upload.single('zipFile'), async (req, res) => {
+    let zipPath;
+    let originalName;
+    let isTempUpload = false;
+
+    try {
+        if (req.body && req.body.filePath && fs.existsSync(req.body.filePath)) {
+            zipPath = req.body.filePath;
+            originalName = path.basename(zipPath);
+        } else if (req.file) {
+            zipPath = req.file.path;
+            originalName = req.file.originalname;
+            isTempUpload = true;
+        } else {
+            return res.status(400).json({ error: 'No ZIP file provided for inspection.' });
+        }
+
+        let directory;
+        try {
+            directory = await unzipper.Open.file(zipPath);
+        } catch (zipErr) {
+            return res.status(400).json({ error: 'Unable to read ZIP file. It may be corrupt or encrypted.' });
+        }
+
+        const validEntries = directory.files.filter(entry => {
+            const zPath = safeZipPath(entry.path);
+            return entry.type !== 'Directory' && !zPath.endsWith('/');
+        });
+
+        const MAX_ZIP_ENTRIES = 500;
+        if (validEntries.length > MAX_ZIP_ENTRIES) {
+            return res.status(400).json({
+                error: `The uploaded ZIP contains ${validEntries.length} files. The maximum allowed limit is ${MAX_ZIP_ENTRIES} files.`
+            });
+        }
+
+        const imageEntries = validEntries.filter(entry => {
+            const ext = path.extname(safeZipPath(entry.path)).toLowerCase();
+            return SUPPORTED_IMAGES.includes(ext);
+        });
+
+        if (imageEntries.length === 0) {
+            return res.status(400).json({
+                error: 'No supported image files (.jpg, .jpeg, .png, .webp, etc.) were found inside the ZIP archive.'
+            });
+        }
+
+        if (imageEntries.length > MAX_FILES) {
+            return res.status(400).json({
+                error: `The uploaded ZIP contains ${imageEntries.length} images. The maximum allowed limit is ${MAX_FILES} images.`
+            });
+        }
+
+        const inspectionId = `inspect-${crypto.randomUUID()}`;
+        const inspectionDir = path.join(TEMP_ROOT, inspectionId);
+        const thumbsDir = path.join(inspectionDir, 'thumbs');
+        const extractedDir = path.join(inspectionDir, 'extracted');
+
+        fs.mkdirSync(thumbsDir, { recursive: true });
+        fs.mkdirSync(extractedDir, { recursive: true });
+
+        const inspectedFiles = [];
+
+        // Extract each image entry and generate a fast WebP thumbnail
+        for (let i = 0; i < imageEntries.length; i++) {
+            const entry = imageEntries[i];
+            const zPath = safeZipPath(entry.path);
+            const entryName = path.basename(zPath);
+            const sourcePath = path.join(extractedDir, zPath);
+            const thumbPath = path.join(thumbsDir, `thumb-${i}.webp`);
+
+            fs.mkdirSync(path.dirname(sourcePath), { recursive: true });
+
+            await new Promise((resolve, reject) => {
+                entry.stream()
+                    .pipe(fs.createWriteStream(sourcePath))
+                    .on('finish', resolve)
+                    .on('error', reject);
+            });
+
+            // Generate small thumbnail (280x280) for instant preview
+            try {
+                await sharp(sourcePath, { limitInputPixels: false, unlimited: true })
+                    .rotate()
+                    .resize({ width: 280, height: 280, fit: 'inside' })
+                    .webp({ quality: 80 })
+                    .toFile(thumbPath);
+            } catch (thumbErr) {
+                console.warn(`Could not generate thumbnail for ${entryName}:`, thumbErr.message);
+            }
+
+            const stats = fs.statSync(sourcePath);
+
+            inspectedFiles.push({
+                id: i,
+                name: entryName,
+                path: zPath,
+                size: stats.size,
+                thumbUrl: fs.existsSync(thumbPath)
+                    ? `/api/inspect-thumb/${inspectionId}/${i}`
+                    : `/api/inspect-raw/${inspectionId}/${i}`,
+                previewUrl: `/api/inspect-raw/${inspectionId}/${i}`
+            });
+        }
+
+        zipInspectionStore.set(inspectionId, {
+            inspectionId,
+            zipPath,
+            originalName,
+            isTempUpload,
+            inspectionDir,
+            extractedDir,
+            files: inspectedFiles,
+            createdAt: Date.now()
+        });
+
+        // Auto-cleanup after 1 hour if not processed
+        setTimeout(() => {
+            const session = zipInspectionStore.get(inspectionId);
+            if (session) {
+                zipInspectionStore.delete(inspectionId);
+                cleanupDirectory(inspectionDir);
+                if (session.isTempUpload && fs.existsSync(session.zipPath)) {
+                    try { fs.unlinkSync(session.zipPath); } catch (_) {}
+                }
+            }
+        }, 60 * 60 * 1000);
+
+        return res.json({
+            success: true,
+            inspectionId,
+            zipName: originalName,
+            zipSize: fs.existsSync(zipPath) ? fs.statSync(zipPath).size : 0,
+            totalImages: inspectedFiles.length,
+            files: inspectedFiles
+        });
+
+    } catch (err) {
+        console.error('ZIP inspection error:', err);
+        return res.status(500).json({ error: err.message || 'Failed to inspect ZIP archive.' });
+    }
+});
+
+app.get('/api/inspect-thumb/:inspectionId/:id', (req, res) => {
+    const { inspectionId, id } = req.params;
+    const session = zipInspectionStore.get(inspectionId);
+    if (!session) return res.status(404).send('Preview session expired');
+
+    const thumbPath = path.join(session.inspectionDir, 'thumbs', `thumb-${id}.webp`);
+    if (fs.existsSync(thumbPath)) {
+        return res.sendFile(thumbPath);
+    }
+    const file = session.files[Number(id)];
+    if (file) {
+        return res.sendFile(path.join(session.extractedDir, file.path));
+    }
+    return res.status(404).send('Not found');
+});
+
+app.get('/api/inspect-raw/:inspectionId/:id', (req, res) => {
+    const { inspectionId, id } = req.params;
+    const session = zipInspectionStore.get(inspectionId);
+    if (!session) return res.status(404).send('Preview session expired');
+
+    const file = session.files[Number(id)];
+    if (file) {
+        return res.sendFile(path.join(session.extractedDir, file.path));
+    }
+    return res.status(404).send('Not found');
+});
 
 
 // ============================================================
@@ -600,7 +763,7 @@ app.post(
     '/api/process',
     upload.array(
         'files',
-        500
+        MAX_FILES
     ),
     async (req, res) => {
 
@@ -608,6 +771,63 @@ app.post(
 
         try {
 
+            // Case A: Processing an already-inspected ZIP session
+            if (req.body && req.body.inspectionId) {
+                const session = zipInspectionStore.get(req.body.inspectionId);
+                if (session) {
+                    jobDirectory = path.join(TEMP_ROOT, `job-${crypto.randomUUID()}`);
+                    const outputDirectory = path.join(jobDirectory, 'zip-output');
+                    fs.mkdirSync(outputDirectory, { recursive: true });
+
+                    const results = await mapConcurrent(
+                        session.files,
+                        CONCURRENCY,
+                        async (item) => {
+                            const sourcePath = path.join(session.extractedDir, item.path);
+                            return await processOneImage(
+                                sourcePath,
+                                item.name,
+                                outputDirectory,
+                                path.dirname(item.path) === '.' ? '' : path.dirname(item.path)
+                            );
+                        }
+                    );
+
+                    const outputZip = path.join(jobDirectory, 'AI-Badged-Images.zip');
+                    await createZip(outputDirectory, outputZip);
+
+                    const jobId = path.basename(jobDirectory);
+                    resultsStore.set(jobId, {
+                        type: 'zip',
+                        zipPath: outputZip,
+                        results
+                    });
+
+                    // Cleanup the temporary inspection session
+                    zipInspectionStore.delete(req.body.inspectionId);
+                    cleanupDirectory(session.inspectionDir);
+                    if (session.isTempUpload && fs.existsSync(session.zipPath)) {
+                        try { fs.unlinkSync(session.zipPath); } catch (_) {}
+                    }
+
+                    return res.json({
+                        success: true,
+                        type: 'zip',
+                        total: results.length,
+                        processed: results.length,
+                        downloadUrl: `/api/download/${jobId}/zip`,
+                        downloadAllUrl: `/api/download/${jobId}/zip`,
+                        files: results.map((item, index) => ({
+                            id: index,
+                            name: item.name,
+                            url: `/api/download/${jobId}/${index}`,
+                            previewUrl: `/api/preview/${jobId}/${index}`
+                        }))
+                    });
+                }
+            }
+
+            // Case B: Standard direct upload
             if (
                 !req.files ||
                 req.files.length === 0
@@ -616,6 +836,13 @@ app.post(
                 return res.status(400).json({
                     error:
                         'Please select at least one image or ZIP file.'
+                });
+            }
+
+            if (req.files.length > MAX_FILES) {
+                return res.status(400).json({
+                    error:
+                        `Maximum limit is ${MAX_FILES} images at a time. Received ${req.files.length} files.`
                 });
             }
 
@@ -696,22 +923,20 @@ app.post(
                 );
 
                 return res.json({
-
                     success: true,
-
                     type: 'zip',
-
-                    total:
-                        result.results.length,
-
-                    processed:
-                        result.results.filter(
-                            item =>
-                                !item.unchanged
-                        ).length,
-
-                    downloadUrl:
-                        `/api/download/${jobId}/zip`
+                    total: result.results.length,
+                    processed: result.results.filter(
+                        item => !item.unchanged
+                    ).length,
+                    downloadUrl: `/api/download/${jobId}/zip`,
+                    downloadAllUrl: `/api/download/${jobId}/zip`,
+                    files: result.results.map((item, index) => ({
+                        id: index,
+                        name: item.name,
+                        url: `/api/download/${jobId}/${index}`,
+                        previewUrl: `/api/preview/${jobId}/${index}`
+                    }))
                 });
             }
 
@@ -1025,6 +1250,35 @@ app.get(
         );
     }
 );
+
+
+// ============================================================
+// ERROR HANDLING MIDDLEWARE
+// ============================================================
+
+app.use((err, req, res, next) => {
+    console.error('Server error caught in middleware:', err);
+
+    if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_COUNT') {
+            return res.status(400).json({
+                error: `Upload limit exceeded. Maximum ${MAX_FILES} images allowed at a time.`
+            });
+        }
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({
+                error: 'File too large. Maximum allowed file size is 5GB.'
+            });
+        }
+        return res.status(400).json({
+            error: `Upload error: ${err.message}`
+        });
+    }
+
+    return res.status(err.status || 500).json({
+        error: err.message || 'Internal server error occurred.'
+    });
+});
 
 
 // ============================================================

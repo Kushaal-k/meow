@@ -148,194 +148,118 @@ function selectBadge(color) {
     return 'light';
 }
 
-async function getBottomRightSample(inputPath) {
-    const image = sharp(inputPath, SHARP_OPTIONS);
+const BADGE_BUFFERS = {};
 
-    const metadata = await image.metadata();
+function getBadgeBuffer(badgeType) {
+    if (!BADGE_BUFFERS[badgeType]) {
+        const filePath = getBadgePath(badgeType);
+        BADGE_BUFFERS[badgeType] = fs.readFileSync(filePath);
+    }
+    return BADGE_BUFFERS[badgeType];
+}
 
+async function getBottomRightSample(inputPath, metadata) {
     const width = metadata.width;
     const height = metadata.height;
 
-    const sampleWidth = Math.round(width * 0.20);
-    const sampleHeight = Math.round(height * 0.20);
+    const sampleWidth = Math.max(1, Math.round(width * 0.20));
+    const sampleHeight = Math.max(1, Math.round(height * 0.20));
 
-    const left = width - sampleWidth;
-    const top = height - sampleHeight;
+    const left = Math.max(0, width - sampleWidth);
+    const top = Math.max(0, height - sampleHeight);
 
-    console.log('Sample area:');
-    console.log('Left:', left);
-    console.log('Top:', top);
-    console.log('Width:', sampleWidth);
-    console.log('Height:', sampleHeight);
-
-    const { data, info } = await image
+    // Fast SIMD-accelerated 1x1 resize extracts average color in milliseconds without large memory allocations
+    const { data } = await sharp(inputPath, SHARP_OPTIONS)
+        .rotate()
         .extract({
             left,
             top,
             width: sampleWidth,
             height: sampleHeight
         })
+        .resize(1, 1, { fit: 'fill' })
         .raw()
-        .toBuffer({
-            resolveWithObject: true
-        });
+        .toBuffer({ resolveWithObject: true });
 
-    const averageColor = calculateAverageColor(
-        data,
-        info.channels
-    );
-
-    console.log('Representative color:');
-    console.log('R:', averageColor.red);
-    console.log('G:', averageColor.green);
-    console.log('B:', averageColor.blue);
+    const averageColor = {
+        red: data[0],
+        green: data[1],
+        blue: data[2]
+    };
 
     const selectedBadge = selectBadge(averageColor);
-
-    console.log('Selected badge:', selectedBadge);
-
     return selectedBadge;
 }
 
 async function processImage(inputPath, outputPath) {
-    console.log('Input:', inputPath);
-    console.log('Output:', outputPath);
-
-    const image = sharp(inputPath, SHARP_OPTIONS);
-
+    const image = sharp(inputPath, SHARP_OPTIONS).rotate();
     const metadata = await image.metadata();
 
-    console.log('Image width:', metadata.width);
-    console.log('Image height:', metadata.height);
-    console.log('Image format:', metadata.format);
+    const selectedBadge = await getBottomRightSample(inputPath, metadata);
+    const badgeRawBuffer = getBadgeBuffer(selectedBadge);
 
-    const selectedBadge = await getBottomRightSample(inputPath);
+    // Ensure badge dimensions never exceed the base image dimensions (avoids "Image to composite must have same dimensions or smaller")
+    const maxBadgeWidth = Math.max(1, Math.min(metadata.width, Math.round(metadata.width * 0.5)));
+    const maxBadgeHeight = Math.max(1, Math.min(metadata.height, Math.round(metadata.height * 0.28)));
 
-    const badgePath = getBadgePath(selectedBadge);
-
-    console.log('Badge file:', badgePath);
-
-    
-    const badgeHeight = Math.round(metadata.height * 0.28);
-
-   
-    const badgeBuffer = await sharp(badgePath, SHARP_OPTIONS)
+    const { data: badgeBuffer, info: badgeInfo } = await sharp(badgeRawBuffer, SHARP_OPTIONS)
         .resize({
-            height: badgeHeight,
-            fit: 'contain'
+            width: maxBadgeWidth,
+            height: maxBadgeHeight,
+            fit: 'inside',
+            withoutEnlargement: true
         })
         .png()
-        .toBuffer();
+        .toBuffer({ resolveWithObject: true });
 
     const rightMargin = -Math.round(metadata.width * 0.015);
     const bottomMargin = -Math.round(metadata.height * 0.05);
 
-    const badgeMetadata = await sharp(badgeBuffer, SHARP_OPTIONS).metadata();
-
-    const left = metadata.width -
-        badgeMetadata.width -
-        rightMargin;
-
-    const top = metadata.height -
-        badgeMetadata.height -
-        bottomMargin;
-
-    console.log('Badge dimensions:');
-    console.log('Width:', badgeMetadata.width);
-    console.log('Height:', badgeMetadata.height);
-
-    console.log('Badge position:');
-    console.log('Left:', left);
-    console.log('Top:', top);
+    const left = Math.max(0, Math.min(metadata.width - badgeInfo.width, metadata.width - badgeInfo.width - rightMargin));
+    const top = Math.max(0, Math.min(metadata.height - badgeInfo.height, metadata.height - badgeInfo.height - bottomMargin));
 
     const outputImage = sharp(inputPath, SHARP_OPTIONS)
-    .composite([
-        {
-            input: badgeBuffer,
-            left,
-            top
-        }
-    ]);
+        .rotate()
+        .composite([
+            {
+                input: badgeBuffer,
+                left,
+                top
+            }
+        ]);
 
-switch (metadata.format) {
+    switch (metadata.format) {
 
-    case 'jpeg':
-        await outputImage
-            .jpeg()
-            .toFile(outputPath);
-        break;
-
-    case 'png':
-        await outputImage
-            .png()
-            .toFile(outputPath);
-        break;
-
-    case 'webp':
-        await outputImage
-            .webp()
-            .toFile(outputPath);
-        break;
-
-    case 'avif':
-        await outputImage
-            .avif()
-            .toFile(outputPath);
-        break;
-
-    case 'tiff':
-        await outputImage
-            .tiff()
-            .toFile(outputPath);
-        break;
-
-    case 'gif':
-        await outputImage
-            .gif()
-            .toFile(outputPath);
-        break;
-
-    case 'heif':
-        await outputImage
-            .heif()
-            .toFile(outputPath);
-        break;
-
-    case 'jxl':
-        await outputImage
-            .jxl()
-            .toFile(outputPath);
-        break;
-
-    case 'jp2':
-        await outputImage
-            .jp2()
-            .toFile(outputPath);
-        break;
-
-    default:
-        throw new Error(
-            `Unsupported output format: ${metadata.format}`
-        );
-}
-
-    const outputMetadata = await sharp(outputPath, SHARP_OPTIONS).metadata();
-
-    console.log('--------------------------------');
-    console.log('Image processing completed');
-    console.log('Input:', inputPath);
-    console.log(
-        'Input dimensions:',
-        `${metadata.width}x${metadata.height}`
-    );
-    console.log('Output:', outputPath);
-    console.log(
-        'Output dimensions:',
-        `${outputMetadata.width}x${outputMetadata.height}`
-    );
-    console.log('Selected badge:', badgePath);
-    console.log('--------------------------------');
-    console.log('Output format:', outputMetadata.format);
+        case 'jpeg':
+            await outputImage.jpeg().toFile(outputPath);
+            break;
+        case 'png':
+            await outputImage.png().toFile(outputPath);
+            break;
+        case 'webp':
+            await outputImage.webp().toFile(outputPath);
+            break;
+        case 'avif':
+            await outputImage.avif().toFile(outputPath);
+            break;
+        case 'tiff':
+            await outputImage.tiff().toFile(outputPath);
+            break;
+        case 'gif':
+            await outputImage.gif().toFile(outputPath);
+            break;
+        case 'heif':
+            await outputImage.heif().toFile(outputPath);
+            break;
+        case 'jxl':
+            await outputImage.jxl().toFile(outputPath);
+            break;
+        case 'jp2':
+            await outputImage.jp2().toFile(outputPath);
+            break;
+        default:
+            throw new Error(`Unsupported output format: ${metadata.format}`);
+    }
 }
 
 
