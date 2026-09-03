@@ -228,6 +228,10 @@ async function processVideo(
     const paddingRight = Math.round(width * 0.042);
     const paddingBottom = Math.round(height * 0.063);
 
+    // Badge entrance animation duration:
+    // Badge moves in from the right edge with a smooth fade-in and stays until the end of the video
+    const animDuration = Number((duration > 0 ? Math.min(0.8, Math.max(0.3, duration * 0.35)) : 0.8).toFixed(2));
+
     // 6. Overlay badge onto video using detected hardware encoder (with automatic CPU fallback)
     const hwConfig = await getHardwareEncoderConfig();
 
@@ -243,10 +247,16 @@ async function processVideo(
 
     const runEncode = (encoderArgs) => {
         return new Promise((resolve, reject) => {
-            const filterGraph = `[0:v]pad=ceil(iw/2)*2:ceil(ih/2)*2[base];[base][1:v]overlay=W-w-${paddingRight}:H-h-${paddingBottom},format=yuv420p[v]`;
+            // Badge animation:
+            // 1. Loop badge PNG via -loop 1 so frames stream continuously
+            // 2. format=rgba,fade=t=in:st=0:d=${animDuration}:alpha=1 fades in badge alpha from 0 to 1
+            // 3. overlay x starts at W (right edge) and eases into (W - w - paddingRight) using ease-out sin curve
+            // 4. shortest=1 terminates overlay cleanly when the base video stream ends
+            const filterGraph = `[0:v]pad=ceil(iw/2)*2:ceil(ih/2)*2[base];[1:v]format=rgba,fade=t=in:st=0:d=${animDuration}:alpha=1[badge];[base][badge]overlay=x='W-(w+${paddingRight})*sin(min(1,t/${animDuration})*PI/2)':y='H-h-${paddingBottom}':shortest=1,format=yuv420p[v]`;
 
             const args = [
                 '-i', inputPath,
+                '-loop', '1',
                 '-i', tempBadgePath,
                 '-filter_complex', filterGraph,
                 '-map', '[v]',
@@ -316,7 +326,8 @@ async function processVideo(
     const thumbFileName = `${baseName}-ai-thumb.webp`;
     const thumbPath = path.join(targetDir, thumbFileName);
     try {
-        await extractVideoThumbnail(outputPath, thumbPath, duration > 1 ? 1 : 0);
+        const thumbTime = duration > 1.2 ? 1.2 : Math.max(0, duration * 0.9);
+        await extractVideoThumbnail(outputPath, thumbPath, thumbTime);
     } catch (tErr) {
         console.warn('Could not extract badged video thumbnail:', tErr.message);
     }
