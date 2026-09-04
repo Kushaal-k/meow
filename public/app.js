@@ -1271,22 +1271,26 @@ function renderResults(result) {
         thumbWrapper.className = 'result-thumb-wrapper';
 
         let thumb;
-        if (file.thumbUrl && !file.thumbUrl.endsWith('.mp4')) {
-            thumb = document.createElement('img');
-            thumb.className = 'result-thumb';
-            thumb.src = file.thumbUrl;
-            thumb.alt = file.name;
-        } else if (isVideoItem) {
-            thumb = document.createElement('video');
-            thumb.className = 'result-thumb result-video-thumb';
-            thumb.src = (file.previewUrl || file.url) + '#t=0.5';
-            thumb.preload = 'metadata';
-            thumb.muted = true;
-            thumb.playsInline = true;
+        if (isVideoItem) {
+            if (file.thumbUrl && file.thumbUrl.includes('/api/thumb/')) {
+                // A real webp thumbnail was generated successfully
+                thumb = document.createElement('img');
+                thumb.className = 'result-thumb';
+                thumb.src = file.thumbUrl;
+                thumb.alt = file.name;
+            } else {
+                // No thumbnail available (generation failed) — fall back to a real <video> element
+                thumb = document.createElement('video');
+                thumb.className = 'result-thumb result-video-thumb';
+                thumb.src = (file.previewUrl || file.url) + '#t=0.5';
+                thumb.preload = 'metadata';
+                thumb.muted = true;
+                thumb.playsInline = true;
+            }
         } else {
             thumb = document.createElement('img');
             thumb.className = 'result-thumb';
-            thumb.src = file.previewUrl || file.url;
+            thumb.src = file.thumbUrl || file.previewUrl || file.url;
             thumb.alt = file.name;
         }
 
