@@ -7,6 +7,7 @@
    ============================================================ */
 
 :root {
+    color-scheme: light;
     --bg: #f5f7f6;
     --surface: #ffffff;
     --header-bg: #ffffff;
@@ -57,6 +58,7 @@
 }
 
 [data-theme="dark"] {
+    color-scheme: dark;
     --bg: #0b1411;
     --surface: #12201a;
     --header-bg: #78faae; /* Electric green top bar */
@@ -762,6 +764,7 @@ body.is-resizing #layoutResizer * {
 
     overflow: hidden;
     transition: all 0.2s ease;
+    user-select: none;
 }
 
 .file-card:hover {
@@ -778,6 +781,8 @@ body.is-resizing #layoutResizer * {
     border-radius: 9px;
 
     background: var(--accent-light);
+    user-select: none;
+    -webkit-user-drag: none;
 }
 
 .file-preview-zip {
@@ -1114,6 +1119,16 @@ input[type="number"] {
 
 [data-theme="dark"] .file-badge-select.is-custom {
     color: var(--secondary);
+}
+
+.file-badge-select option {
+    background-color: var(--surface);
+    color: var(--text-heading);
+}
+
+[data-theme="dark"] .file-badge-select option {
+    background-color: #12201a;
+    color: #f0faf5;
 }
 
 .file-badge-arrow {
@@ -1833,6 +1848,7 @@ input[type="number"] {
 .result-thumb-wrapper {
     position: relative;
     width: 100%;
+    aspect-ratio: 1.2;
     border-radius: 8px;
     background: var(--accent-light);
     overflow: hidden;
@@ -1843,18 +1859,18 @@ input[type="number"] {
 
 .result-thumb {
     width: 100%;
-    aspect-ratio: auto;
-    height: auto;
-    max-height: 280px;
+    height: 100%;
+    aspect-ratio: 1.2;
     border-radius: 8px;
-    object-fit: contain;
+    object-fit: cover;
     background: var(--accent-light);
     display: block;
 }
 
 .result-video-thumb {
     width: 100%;
-    height: 180px;
+    height: 100%;
+    aspect-ratio: 1.2;
     object-fit: cover;
     background: #000;
 }
@@ -1912,6 +1928,7 @@ input[type="number"] {
     color: #0e3a2f;
     transition: all 0.15s ease;
     width: fit-content;
+    margin-top: auto;
 }
 
 [data-theme="dark"] .result-download {
