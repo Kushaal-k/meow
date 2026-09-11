@@ -212,6 +212,50 @@
                     </div>
 
 
+                    <!-- Global Badge Variant Settings (Visible when files are selected) -->
+                    <div id="badgeSettingsCard" class="badge-selection-card">
+                        <div class="badge-selection-header">
+                            <div class="badge-selection-title-wrap">
+                                <svg class="badge-selection-head-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 2l2.4 5.2 5.6.8-4 4 1 5.6-5-2.8-5 2.8 1-5.6-4-4 5.6-.8z"></path>
+                                </svg>
+                                <div class="badge-selection-title">
+                                    Default Badge Variant
+                                    <span class="badge-selection-badge" id="globalBadgeStatusBadge">Auto</span>
+                                </div>
+                            </div>
+                            <button id="resetGlobalBadgeBtn" class="badge-reset-btn hidden" type="button" title="Reset to Auto (Smart Detect)">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                                    <path d="M3 3v5h5"></path>
+                                </svg>
+                                <span>Reset to Auto</span>
+                            </button>
+                        </div>
+                        <div class="badge-pill-group" id="globalBadgePillGroup" role="radiogroup" aria-label="Default badge variant">
+                            <button type="button" class="badge-variant-pill active" data-variant="auto" role="radio" aria-checked="true" title="Auto">
+                                <span class="badge-pill-label">Auto</span>
+                            </button>
+                            <button type="button" class="badge-variant-pill" data-variant="dark" role="radio" aria-checked="false" title="Light Badge">
+                                <span class="badge-pill-indicator dot-light"></span>
+                                <span class="badge-pill-label">Light Badge</span>
+                            </button>
+                            <button type="button" class="badge-variant-pill" data-variant="light" role="radio" aria-checked="false" title="Dark Badge">
+                                <span class="badge-pill-indicator dot-dark"></span>
+                                <span class="badge-pill-label">Dark Badge</span>
+                            </button>
+                            <button type="button" class="badge-variant-pill" data-variant="darkGreen" role="radio" aria-checked="false" title="Electric Green Badge">
+                                <span class="badge-pill-indicator dot-electric-green"></span>
+                                <span class="badge-pill-label">Electric Green Badge</span>
+                            </button>
+                            <button type="button" class="badge-variant-pill" data-variant="electricGreen" role="radio" aria-checked="false" title="Emerald Green Badge">
+                                <span class="badge-pill-indicator dot-dark-green"></span>
+                                <span class="badge-pill-label">Emerald Green Badge</span>
+                            </button>
+                        </div>
+                    </div>
+
+
                     <!-- Video Brand Timing Controls (Visible in Video Mode) -->
                     <div id="videoTimingSettings" class="video-timing-card hidden">
                         <div class="video-timing-header">

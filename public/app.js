@@ -582,6 +582,150 @@ async function addFiles(files) {
     renderFiles();
 }
 
+// ============================================================
+// BADGE VARIANT SELECTION STATE & HELPERS
+// ============================================================
+
+let globalBadgeVariant = 'auto';
+let perFileBadgeState = {}; // fileName -> 'inherit' | 'auto' | 'dark' | 'light' | 'darkGreen' | 'electricGreen'
+
+const BADGE_VARIANT_LABELS = {
+    auto: 'Auto',
+    dark: 'Light Badge',
+    light: 'Dark Badge',
+    darkGreen: 'Electric Green Badge',
+    electricGreen: 'Emerald Green Badge'
+};
+
+function updateFileBadgeDefaultLabels() {
+    const defaultLabelText = globalBadgeVariant === 'auto'
+        ? 'Default: Auto'
+        : `Default: ${BADGE_VARIANT_LABELS[globalBadgeVariant] || globalBadgeVariant}`;
+    document.querySelectorAll('.file-badge-select').forEach(sel => {
+        const optInherit = sel.querySelector('option[value="inherit"]');
+        if (optInherit) {
+            optInherit.textContent = defaultLabelText;
+        }
+    });
+}
+
+function setGlobalBadgeVariant(variant) {
+    globalBadgeVariant = variant;
+    const pillGroup = document.getElementById('globalBadgePillGroup');
+    const resetBtn = document.getElementById('resetGlobalBadgeBtn');
+    const statusBadge = document.getElementById('globalBadgeStatusBadge');
+
+    if (pillGroup) {
+        pillGroup.querySelectorAll('.badge-variant-pill').forEach(p => {
+            const isMatch = p.getAttribute('data-variant') === variant;
+            p.classList.toggle('active', isMatch);
+            p.setAttribute('aria-checked', isMatch ? 'true' : 'false');
+        });
+    }
+
+    if (statusBadge) {
+        statusBadge.textContent = BADGE_VARIANT_LABELS[variant] || variant;
+    }
+
+    if (resetBtn) {
+        resetBtn.classList.toggle('hidden', variant === 'auto');
+    }
+
+    updateFileBadgeDefaultLabels();
+}
+
+function setupGlobalBadgeListeners() {
+    const pillGroup = document.getElementById('globalBadgePillGroup');
+    const resetBtn = document.getElementById('resetGlobalBadgeBtn');
+
+    if (pillGroup) {
+        pillGroup.querySelectorAll('.badge-variant-pill').forEach(pill => {
+            pill.addEventListener('click', (e) => {
+                e.preventDefault();
+                const variant = pill.getAttribute('data-variant');
+                if (variant) setGlobalBadgeVariant(variant);
+            });
+        });
+    }
+
+    if (resetBtn) {
+        resetBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            setGlobalBadgeVariant('auto');
+        });
+    }
+}
+
+function createFileBadgeElement(fileName, index) {
+    const currentVal = perFileBadgeState[fileName] || 'inherit';
+
+    const container = document.createElement('div');
+    container.className = 'file-badge-box';
+
+    const row = document.createElement('div');
+    row.className = 'file-badge-row';
+
+    const label = document.createElement('span');
+    label.className = 'file-badge-label';
+    label.innerHTML = `
+        <svg class="file-badge-label-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2l2.4 5.2 5.6.8-4 4 1 5.6-5-2.8-5 2.8 1-5.6-4-4 5.6-.8z"></path>
+        </svg>
+        <span>Badge:</span>
+    `;
+
+    const selectWrap = document.createElement('div');
+    selectWrap.className = 'file-badge-select-wrap';
+
+    const select = document.createElement('select');
+    select.className = `file-badge-select ${currentVal !== 'inherit' ? 'is-custom' : ''}`;
+    select.title = `Badge variant for ${fileName}`;
+
+    const defaultLabelText = globalBadgeVariant === 'auto'
+        ? 'Default: Auto'
+        : `Default: ${BADGE_VARIANT_LABELS[globalBadgeVariant] || globalBadgeVariant}`;
+
+    select.innerHTML = `
+        <option value="inherit">${defaultLabelText}</option>
+        <option value="auto">Auto</option>
+        <option value="dark">Light Badge</option>
+        <option value="light">Dark Badge</option>
+        <option value="darkGreen">Electric Green Badge</option>
+        <option value="electricGreen">Emerald Green Badge</option>
+    `;
+
+    select.value = currentVal;
+
+    select.onchange = (e) => {
+        e.stopPropagation();
+        const newVal = select.value;
+        if (newVal === 'inherit') {
+            delete perFileBadgeState[fileName];
+            select.classList.remove('is-custom');
+        } else {
+            perFileBadgeState[fileName] = newVal;
+            select.classList.add('is-custom');
+        }
+    };
+
+    const arrow = document.createElement('span');
+    arrow.className = 'file-badge-arrow';
+    arrow.innerHTML = `
+        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+    `;
+
+    selectWrap.appendChild(select);
+    selectWrap.appendChild(arrow);
+
+    row.appendChild(label);
+    row.appendChild(selectWrap);
+    container.appendChild(row);
+
+    return container;
+}
+
 // State for per-video timing overrides
 let perVideoTimingState = {};
 
@@ -783,6 +927,15 @@ function renderFiles() {
         }
     }
 
+    const badgeSettingsCard = document.getElementById('badgeSettingsCard');
+    if (badgeSettingsCard) {
+        if (activeList.length > 0 || activeSession) {
+            badgeSettingsCard.classList.remove('hidden');
+        } else {
+            badgeSettingsCard.classList.add('hidden');
+        }
+    }
+
     if (activeList.length === 0 && !activeSession) {
 
         filesSection.classList.add(
@@ -852,6 +1005,7 @@ function renderFiles() {
                 card.appendChild(preview);
                 card.appendChild(name);
                 card.appendChild(size);
+                card.appendChild(createFileBadgeElement(file.name, index));
                 if (isVideoMode) {
                     card.appendChild(createVideoTimingElement(file.name, index));
                 }
@@ -897,7 +1051,12 @@ function renderFiles() {
             } else {
                 preview = document.createElement('img');
                 preview.className = 'file-preview';
-                preview.src = URL.createObjectURL(file);
+                preview.loading = 'lazy';
+                preview.decoding = 'async';
+                if (!file._previewUrl) {
+                    file._previewUrl = URL.createObjectURL(file);
+                }
+                preview.src = file._previewUrl;
             }
 
             preview.alt = file.name;
@@ -941,16 +1100,22 @@ function renderFiles() {
             remove.onclick = (e) => {
                 e.stopPropagation();
 
-                activeList.splice(
+                const removed = activeList.splice(
                     index,
                     1
-                );
+                )[0];
+
+                if (removed && removed._previewUrl) {
+                    try { URL.revokeObjectURL(removed._previewUrl); } catch (_) {}
+                    removed._previewUrl = null;
+                }
 
                 renderFiles();
             };
 
             card.appendChild(name);
             card.appendChild(size);
+            card.appendChild(createFileBadgeElement(file.name, index));
             if (isVideoMode) {
                 card.appendChild(createVideoTimingElement(file.name, index));
             }
@@ -1019,6 +1184,15 @@ dropZone.addEventListener(
     }
 );
 
+function revokeAllPreviewUrls() {
+    selectedFiles.forEach(file => {
+        if (file && file._previewUrl) {
+            try { URL.revokeObjectURL(file._previewUrl); } catch (_) {}
+            file._previewUrl = null;
+        }
+    });
+}
+
 clearButton.onclick = () => {
 
     if (currentMediaMode === 'videos') {
@@ -1026,9 +1200,11 @@ clearButton.onclick = () => {
         activeVideoZipSession = null;
         perVideoTimingState = {};
     } else {
+        revokeAllPreviewUrls();
         selectedFiles = [];
         activeZipSession = null;
     }
+    perFileBadgeState = {};
 
     renderFiles();
 };
@@ -1219,7 +1395,9 @@ function renderResults(result) {
                     singlePreviewVideo.src = '';
                 }
                 singlePreviewImg.classList.remove('hidden');
-                singlePreviewImg.src = singleFile.previewUrl || singleFile.url;
+                singlePreviewImg.loading = 'lazy';
+                singlePreviewImg.decoding = 'async';
+                singlePreviewImg.src = singleFile.thumbUrl || singleFile.previewUrl || singleFile.url;
             }
 
             singleFileName.textContent = singleFile.name;
@@ -1276,6 +1454,8 @@ function renderResults(result) {
                 // A real webp thumbnail was generated successfully
                 thumb = document.createElement('img');
                 thumb.className = 'result-thumb';
+                thumb.loading = 'lazy';
+                thumb.decoding = 'async';
                 thumb.src = file.thumbUrl;
                 thumb.alt = file.name;
             } else {
@@ -1290,6 +1470,8 @@ function renderResults(result) {
         } else {
             thumb = document.createElement('img');
             thumb.className = 'result-thumb';
+            thumb.loading = 'lazy';
+            thumb.decoding = 'async';
             thumb.src = file.thumbUrl || file.previewUrl || file.url;
             thumb.alt = file.name;
         }
@@ -1484,6 +1666,12 @@ processButton.onclick =
             formData.append('videoTimingPerFile', JSON.stringify(perFileTiming));
         }
 
+        // Badge variant options (global default and per-file overrides)
+        formData.append('globalBadgeVariant', globalBadgeVariant);
+        if (Object.keys(perFileBadgeState).length > 0) {
+            formData.append('perFileBadgeVariants', JSON.stringify(perFileBadgeState));
+        }
+
         if (activeSession && activeSession.inspectionId) {
             formData.append(
                 'inspectionId',
@@ -1600,10 +1788,12 @@ processButton.onclick =
 
 againButton.onclick = () => {
 
+    revokeAllPreviewUrls();
     selectedFiles = [];
     activeZipSession = null;
     selectedVideos = [];
     activeVideoZipSession = null;
+    perFileBadgeState = {};
 
     renderFiles();
 
@@ -1614,3 +1804,6 @@ againButton.onclick = () => {
     downloadButton.classList.remove('hidden');
     closeModal();
 };
+
+// Initialize global badge listeners
+setupGlobalBadgeListeners();

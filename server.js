@@ -23,7 +23,7 @@ const app = express();
 const PORT = 3000;
 const MAX_FILES = 250;
 const MAX_VIDEOS = 10;
-const CONCURRENCY = Math.max(2, Math.min(8, os.cpus().length || 4));
+const CONCURRENCY = Math.max(2, Math.min(4, os.cpus().length || 4));
 const VIDEO_CONCURRENCY = Math.max(1, Math.min(2, Math.floor((os.cpus().length || 4) / 2)));
 
 const TEMP_ROOT = path.join(
@@ -42,9 +42,26 @@ fs.mkdirSync(UPLOADS_DIR, {
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB
 
-const upload = multer({
-    dest: UPLOADS_DIR,
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        try {
+            fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+            cb(null, UPLOADS_DIR);
+        } catch (err) {
+            cb(err);
+        }
+    },
+    filename: (req, file, cb) => {
+        crypto.randomBytes(16, (err, raw) => {
+            if (err) return cb(err);
+            const ext = path.extname(file.originalname || '').toLowerCase();
+            cb(null, raw.toString('hex') + ext);
+        });
+    }
+});
 
+const upload = multer({
+    storage,
     limits: {
         files: MAX_FILES,
         fileSize: MAX_FILE_SIZE
@@ -213,7 +230,8 @@ async function processOneImage(
     inputPath,
     originalName,
     outputDirectory,
-    relativeDirectory = ''
+    relativeDirectory = '',
+    badgeVariant = null
 ) {
 
     const extension =
@@ -225,7 +243,7 @@ async function processOneImage(
             extension
         );
 
-    const outputName =
+    let outputName =
         `${baseName}-ai${extension}`;
 
     const targetDirectory =
@@ -241,6 +259,12 @@ async function processOneImage(
         }
     );
 
+    let counter = 1;
+    while (fs.existsSync(path.join(targetDirectory, outputName))) {
+        outputName = `${baseName}-ai-${counter}${extension}`;
+        counter++;
+    }
+
     const outputPath =
         path.join(
             targetDirectory,
@@ -255,7 +279,8 @@ async function processOneImage(
 
     await processImage(
         inputPath,
-        outputPath
+        outputPath,
+        badgeVariant
     );
 
     console.log(
@@ -263,9 +288,24 @@ async function processOneImage(
         outputPath
     );
 
+    let thumbPath = null;
+    try {
+        const thumbName = `${path.basename(outputName, extension)}-ai-thumb.webp`;
+        thumbPath = path.join(targetDirectory, thumbName);
+        await sharp(outputPath, { limitInputPixels: false, unlimited: true })
+            .rotate()
+            .resize({ width: 320, height: 320, fit: 'inside' })
+            .webp({ quality: 80 })
+            .toFile(thumbPath);
+    } catch (thumbErr) {
+        console.warn('Could not generate image thumbnail:', thumbErr.message);
+        thumbPath = null;
+    }
+
     return {
         name: outputName,
         path: outputPath,
+        thumbPath,
         relativePath: path
             .join(
                 relativeDirectory,
@@ -332,7 +372,13 @@ function createZip(
 
             archive.directory(
                 sourceDirectory,
-                false
+                false,
+                (entry) => {
+                    if (entry && entry.name && (entry.name.endsWith('-ai-thumb.webp') || entry.name.endsWith('.thumb.webp'))) {
+                        return false;
+                    }
+                    return entry;
+                }
             );
 
             archive.finalize();
@@ -363,7 +409,7 @@ function createZipFromFiles(
                     'zip',
                     {
                         zlib: {
-                            level: 9
+                            level: 1
                         }
                     }
                 );
@@ -414,7 +460,8 @@ function createZipFromFiles(
 
 async function processImageUploads(
     files,
-    jobDirectory
+    jobDirectory,
+    badgeSettings = {}
 ) {
 
     const outputDirectory =
@@ -441,11 +488,14 @@ async function processImageUploads(
     const results = await mapConcurrent(
         validFiles,
         CONCURRENCY,
-        async (file) => {
+        async (file, index) => {
+            const badgeVariant = resolveBadgeVariant(file.originalname, index, badgeSettings);
             return await processOneImage(
                 file.path,
                 file.originalname,
-                outputDirectory
+                outputDirectory,
+                '',
+                badgeVariant
             );
         }
     );
@@ -456,6 +506,24 @@ async function processImageUploads(
     };
 }
 
+
+// ============================================================
+// BADGE VARIANT RESOLUTION HELPER
+// ============================================================
+
+function resolveBadgeVariant(itemIdentifier, index, badgeSettings = {}) {
+    const globalVariant = badgeSettings.globalVariant;
+    const perFile = badgeSettings.perFile || {};
+    const custom = (itemIdentifier && perFile[itemIdentifier]) || (index !== undefined && perFile[index]) || null;
+    if (custom && custom !== 'inherit' && custom !== 'default') {
+        if (custom === 'auto') return null; // Force automatic detection
+        return custom;
+    }
+    if (globalVariant && globalVariant !== 'auto') {
+        return globalVariant;
+    }
+    return null; // null = trigger automatic detection
+}
 
 // ============================================================
 // VIDEO TIMING RESOLUTION HELPER
@@ -484,7 +552,8 @@ function resolveVideoTiming(itemIdentifier, index, videoTiming = {}) {
 async function processVideoUploads(
     files,
     jobDirectory,
-    videoTiming = {}
+    videoTiming = {},
+    badgeSettings = {}
 ) {
 
     const outputDirectory =
@@ -513,12 +582,13 @@ async function processVideoUploads(
         VIDEO_CONCURRENCY,
         async (file, index) => {
             const timing = resolveVideoTiming(file.originalname, index, videoTiming);
+            const badgeVariant = resolveBadgeVariant(file.originalname, index, badgeSettings);
             return await processVideo(
                 file.path,
                 file.originalname,
                 outputDirectory,
                 '',
-                timing
+                { ...timing, badgeVariant }
             );
         }
     );
@@ -537,7 +607,8 @@ async function processVideoUploads(
 async function processZip(
     zipFile,
     jobDirectory,
-    videoTiming = {}
+    videoTiming = {},
+    badgeSettings = {}
 ) {
 
     const extractDirectory =
@@ -654,6 +725,7 @@ async function processZip(
         filesToProcess,
         concurrency,
         async (item, index) => {
+            const badgeVariant = resolveBadgeVariant(item.originalFileName, index, badgeSettings) || resolveBadgeVariant(item.zipPath, index, badgeSettings);
             if (item.isVideo) {
                 const timing = resolveVideoTiming(item.originalFileName, index, videoTiming);
                 return await processVideo(
@@ -661,14 +733,15 @@ async function processZip(
                     item.originalFileName,
                     outputDirectory,
                     item.relativeDirectory,
-                    timing
+                    { ...timing, badgeVariant }
                 );
             } else if (item.isImage) {
                 return await processOneImage(
                     item.sourcePath,
                     item.originalFileName,
                     outputDirectory,
-                    item.relativeDirectory
+                    item.relativeDirectory,
+                    badgeVariant
                 );
             } else {
                 const targetPath = path.join(outputDirectory, item.zipPath);
@@ -925,6 +998,22 @@ app.post(
                 } catch (_) {}
             }
 
+            // Parse badge variant options (global default and per-file overrides)
+            let badgeSettings = { globalVariant: 'auto', perFile: {} };
+            if (req.body) {
+                if (req.body.globalBadgeVariant) {
+                    badgeSettings.globalVariant = req.body.globalBadgeVariant;
+                } else if (req.body.badgeVariantGlobal) {
+                    badgeSettings.globalVariant = req.body.badgeVariantGlobal;
+                }
+                const perFileRaw = req.body.perFileBadgeVariants || req.body.badgeVariantPerFile;
+                if (perFileRaw) {
+                    try {
+                        badgeSettings.perFile = typeof perFileRaw === 'string' ? JSON.parse(perFileRaw) : perFileRaw;
+                    } catch (_) {}
+                }
+            }
+
             // Case A: Processing an already-inspected ZIP session
             if (req.body && req.body.inspectionId) {
                 const session = zipInspectionStore.get(req.body.inspectionId);
@@ -941,6 +1030,7 @@ app.post(
                         concurrency,
                         async (item, index) => {
                             const sourcePath = path.join(session.extractedDir, item.path);
+                            const badgeVariant = resolveBadgeVariant(item.name, index, badgeSettings) || resolveBadgeVariant(item.path, index, badgeSettings);
                             if (isVideoSession) {
                                 const timing = resolveVideoTiming(item.name, index, videoTiming);
                                 return await processVideo(
@@ -948,14 +1038,15 @@ app.post(
                                     item.name,
                                     outputDirectory,
                                     path.dirname(item.path) === '.' ? '' : path.dirname(item.path),
-                                    timing
+                                    { ...timing, badgeVariant }
                                 );
                             } else {
                                 return await processOneImage(
                                     sourcePath,
                                     item.name,
                                     outputDirectory,
-                                    path.dirname(item.path) === '.' ? '' : path.dirname(item.path)
+                                    path.dirname(item.path) === '.' ? '' : path.dirname(item.path),
+                                    badgeVariant
                                 );
                             }
                         }
@@ -992,7 +1083,7 @@ app.post(
                             id: index,
                             name: item.name,
                             mediaType: isVideoSession ? 'video' : 'image',
-                            thumbUrl: (isVideoSession && item.thumbPath)
+                            thumbUrl: item.thumbPath
                                 ? `/api/thumb/${jobId}/${index}`
                                 : `/api/preview/${jobId}/${index}`,
                             url: `/api/download/${jobId}/${index}`,
@@ -1066,7 +1157,8 @@ app.post(
                     await processZip(
                         zipFile,
                         jobDirectory,
-                        videoTiming
+                        videoTiming,
+                        badgeSettings
                     );
 
                 const outputZip =
@@ -1110,6 +1202,9 @@ app.post(
                     files: result.results.map((item, index) => ({
                         id: index,
                         name: item.name,
+                        thumbUrl: item.thumbPath
+                            ? `/api/thumb/${jobId}/${index}`
+                            : `/api/preview/${jobId}/${index}`,
                         url: `/api/download/${jobId}/${index}`,
                         previewUrl: `/api/preview/${jobId}/${index}`
                     }))
@@ -1153,12 +1248,14 @@ app.post(
                 result = await processVideoUploads(
                     req.files,
                     jobDirectory,
-                    videoTiming
+                    videoTiming,
+                    badgeSettings
                 );
             } else {
                 result = await processImageUploads(
                     req.files,
-                    jobDirectory
+                    jobDirectory,
+                    badgeSettings
                 );
             }
 
@@ -1197,7 +1294,7 @@ app.post(
                             id: 0,
                             name: item.name,
                             mediaType: isVideoUpload ? 'video' : 'image',
-                            thumbUrl: (isVideoUpload && item.thumbPath)
+                            thumbUrl: item.thumbPath
                                 ? `/api/thumb/${jobId}/0`
                                 : `/api/preview/${jobId}/0`,
                             url:
@@ -1257,7 +1354,7 @@ app.post(
                             id: index,
                             name: item.name,
                             mediaType: isVideoUpload ? 'video' : 'image',
-                            thumbUrl: (isVideoUpload && item.thumbPath)
+                            thumbUrl: item.thumbPath
                                 ? `/api/thumb/${jobId}/${index}`
                                 : `/api/preview/${jobId}/${index}`,
                             url:
@@ -1292,6 +1389,14 @@ app.post(
                     error.message ||
                     'Image processing failed.'
             });
+        } finally {
+            if (req.files && Array.isArray(req.files)) {
+                for (const file of req.files) {
+                    if (file && file.path && fs.existsSync(file.path)) {
+                        try { fs.unlinkSync(file.path); } catch (_) {}
+                    }
+                }
+            }
         }
     }
 );
@@ -1500,15 +1605,20 @@ app.use((err, req, res, next) => {
 // START SERVER
 // ============================================================
 
-function startServer(preferredPort = PORT, host = '127.0.0.1') {
+function startServer(preferredPort = PORT, host = '127.0.0.1', allowRandomPort = false) {
     return new Promise((resolve, reject) => {
         const tryListen = (portToTry) => {
             const server = http.createServer(app);
 
             server.on('error', (err) => {
-                if (err.code === 'EADDRINUSE' && portToTry !== 0) {
-                    console.warn(`Port ${portToTry} is in use. Trying random available port...`);
-                    tryListen(0);
+                if (err.code === 'EADDRINUSE') {
+                    if (allowRandomPort && portToTry !== 0) {
+                        console.warn(`Port ${portToTry} is in use. Trying random available port...`);
+                        tryListen(0);
+                    } else {
+                        console.error(`Port ${portToTry} is already in use by another running instance.`);
+                        reject(new Error(`Port ${portToTry} is already in use. Please stop the other process or set PORT.`));
+                    }
                 } else {
                     reject(err);
                 }

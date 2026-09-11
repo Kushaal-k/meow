@@ -239,12 +239,16 @@ async function processVideo(
     );
     await extractVideoThumbnail(inputPath, sampleFramePath, duration > 1 ? 1 : 0);
 
-    // 3. Analyze background color on bottom-right of the sample frame
+    // 3. Analyze background color on bottom-right of the sample frame (or use custom badge if specified)
     let chosenScheme = 'light';
-    try {
-        chosenScheme = await getBottomRightSample(sampleFramePath);
-    } catch (sampleErr) {
-        console.warn('Fallback to light badge scheme for video:', sampleErr.message);
+    if (options && options.badgeVariant && BADGES[options.badgeVariant]) {
+        chosenScheme = options.badgeVariant;
+    } else {
+        try {
+            chosenScheme = await getBottomRightSample(sampleFramePath);
+        } catch (sampleErr) {
+            console.warn('Fallback to light badge scheme for video:', sampleErr.message);
+        }
     }
 
     // 4. Trim transparent padding from raw badge asset and scale visible emblem proportionally
