@@ -254,7 +254,12 @@ async function processVideo(
     // 4. Trim transparent padding from raw badge asset and scale visible emblem proportionally
     const badgePath = BADGES[chosenScheme];
     const baseDim = Math.min(width, height);
-    const targetBadgeHeight = Math.max(20, Math.round(baseDim * 0.046));
+    let targetBadgeHeight = Math.max(20, Math.round(baseDim * 0.046));
+
+    // AI Voice Over is a fixed single-variant overlay rendered smaller than the color badges
+    if (chosenScheme === 'aiVoiceOver') {
+        targetBadgeHeight = Math.round(targetBadgeHeight * 0.58);
+    }
 
     const resizedBadgeBuffer = await sharp(badgePath)
         .trim() // Strips the large transparent padding baked into the raw badge PNG
@@ -308,13 +313,20 @@ async function processVideo(
     // If hasExit is false: badge slides in from right + fades in, and stays till the end
     let fadeFilter;
     let xExpr;
+    // Fixed horizontal position for the final resting spot, used as-is by the opacity-only variant below
+    const restX = `W-(w+${paddingRight})`;
 
     if (hasExit) {
         fadeFilter = `format=rgba,fade=t=in:st=${st}:d=${animDuration}:alpha=1,fade=t=out:st=${exitStart}:d=${animDuration}:alpha=1`;
-        xExpr = `W-(w+${paddingRight})*if(lt(t,${st}),0,if(lt(t,${enterEnd}),sin((t-${st})/${animDuration}*PI/2),if(lt(t,${exitStart}),1,if(lt(t,${et}),sin((${et}-t)/${animDuration}*PI/2),0))))`;
+        xExpr = `${restX}*if(lt(t,${st}),0,if(lt(t,${enterEnd}),sin((t-${st})/${animDuration}*PI/2),if(lt(t,${exitStart}),1,if(lt(t,${et}),sin((${et}-t)/${animDuration}*PI/2),0))))`;
     } else {
         fadeFilter = `format=rgba,fade=t=in:st=${st}:d=${animDuration}:alpha=1`;
-        xExpr = `W-(w+${paddingRight})*if(lt(t,${st}),0,if(lt(t,${enterEnd}),sin((t-${st})/${animDuration}*PI/2),1))`;
+        xExpr = `${restX}*if(lt(t,${st}),0,if(lt(t,${enterEnd}),sin((t-${st})/${animDuration}*PI/2),1))`;
+    }
+
+    // AI Voice Over only fades in/out at its final position, with no slide-in/slide-out motion
+    if (chosenScheme === 'aiVoiceOver') {
+        xExpr = restX;
     }
 
     // 7. Overlay badge onto video using detected hardware encoder (with automatic CPU fallback)

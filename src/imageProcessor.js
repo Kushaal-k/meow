@@ -38,14 +38,17 @@ const BADGE_FILES = {
     darkGreen: 'dark_green_bg_badge.png',
     electricGreen: 'electric_green_bg_badge.png',
     dark: 'dark_bg_badge.png',
-    light: 'light_bg_badge.png'
+    light: 'light_bg_badge.png',
+    // Single fixed overlay with no color variants; applied as-is when explicitly selected
+    aiVoiceOver: 'AI_Voice_Overlay.png'
 };
 
 const BADGES = {
     darkGreen: resolveBadgePath(BADGE_FILES.darkGreen),
     electricGreen: resolveBadgePath(BADGE_FILES.electricGreen),
     dark: resolveBadgePath(BADGE_FILES.dark),
-    light: resolveBadgePath(BADGE_FILES.light)
+    light: resolveBadgePath(BADGE_FILES.light),
+    aiVoiceOver: resolveBadgePath(BADGE_FILES.aiVoiceOver)
 };
 
 function getBadgePath(badgeType) {
@@ -240,7 +243,12 @@ async function processImage(inputPath, outputPath, badgeOverride = null) {
 
     // Scale visible emblem proportionally to the image base dimension (subtly reduced size)
     // Ratio of trimmed badge emblem is 113 x 90 = 1.2555
-    const targetBadgeHeight = Math.max(14, Math.min(Math.round(metadata.height * 0.22), Math.round(baseDim * 0.038)));
+    let targetBadgeHeight = Math.max(14, Math.min(Math.round(metadata.height * 0.22), Math.round(baseDim * 0.038)));
+
+    // AI Voice Over is a fixed single-variant overlay rendered smaller than the color badges
+    if (selectedBadge === 'aiVoiceOver') {
+        targetBadgeHeight = Math.round(targetBadgeHeight * 0.58);
+    }
 
     // Trim all baked-in transparent empty borders from the raw asset
     // so badge dimensions and position calculations are 100% exact to the visible emblem

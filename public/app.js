@@ -594,7 +594,8 @@ const BADGE_VARIANT_LABELS = {
     dark: 'Light Badge',
     light: 'Dark Badge',
     darkGreen: 'Electric Green Badge',
-    electricGreen: 'Emerald Green Badge'
+    electricGreen: 'Emerald Green Badge',
+    aiVoiceOver: 'AI Voice Over'
 };
 
 function updateFileBadgeDefaultLabels() {
@@ -692,6 +693,7 @@ function createFileBadgeElement(fileName, index) {
         <option value="light">Dark Badge</option>
         <option value="darkGreen">Electric Green Badge</option>
         <option value="electricGreen">Emerald Green Badge</option>
+        <option value="aiVoiceOver">AI Voice Over</option>
     `;
 
     select.value = currentVal;
