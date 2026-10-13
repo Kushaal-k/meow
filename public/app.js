@@ -587,7 +587,7 @@ async function addFiles(files) {
 // ============================================================
 
 let globalBadgeVariant = 'auto';
-let perFileBadgeState = {}; // fileName -> 'inherit' | 'auto' | 'dark' | 'light' | 'darkGreen' | 'electricGreen'
+let perFileBadgeState = {}; // fileName -> 'inherit' | 'auto' | 'dark' | 'light' | 'darkGreen' | 'electricGreen' | 'aiVoiceOver*'
 
 const BADGE_VARIANT_LABELS = {
     auto: 'Auto',
@@ -595,8 +595,53 @@ const BADGE_VARIANT_LABELS = {
     light: 'Dark Badge',
     darkGreen: 'Electric Green Badge',
     electricGreen: 'Emerald Green Badge',
-    aiVoiceOver: 'AI Voice Over'
+    aiVoiceOver: 'AI Voice Over',
+    aiVoiceOverBlack: 'AI Voice Over',
+    aiVoiceOverDarkGreen: 'AI Voice Over',
+    aiVoiceOverElectricGreen: 'AI Voice Over'
 };
+
+// AI Voice Over text-colour options (white is the default); each maps to a distinct badge variant key
+const AI_VOICE_COLORS = [
+    { variant: 'aiVoiceOver', hex: '#ffffff', label: 'White' },
+    { variant: 'aiVoiceOverBlack', hex: '#000000', label: 'Black' },
+    { variant: 'aiVoiceOverDarkGreen', hex: '#0e3a2f', label: 'Dark Green' },
+    { variant: 'aiVoiceOverElectricGreen', hex: '#78faae', label: 'Electric Green' }
+];
+
+function isAiVoiceVariant(variant) {
+    return typeof variant === 'string' && variant.indexOf('aiVoiceOver') === 0;
+}
+
+// Builds a row of selectable text-colour dots; getSelected() returns the current variant, onSelect(variant) applies a change
+function buildAiVoiceColorDots(container, getSelected, onSelect) {
+    container.innerHTML = '';
+    AI_VOICE_COLORS.forEach(color => {
+        const dot = document.createElement('button');
+        dot.type = 'button';
+        dot.className = 'ai-voice-dot';
+        dot.setAttribute('data-variant', color.variant);
+        dot.setAttribute('role', 'radio');
+        dot.setAttribute('title', color.label);
+        dot.setAttribute('aria-label', color.label);
+        dot.style.setProperty('--dot-color', color.hex);
+        const selected = getSelected() === color.variant;
+        dot.classList.toggle('active', selected);
+        dot.setAttribute('aria-checked', selected ? 'true' : 'false');
+        dot.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onSelect(color.variant);
+            container.querySelectorAll('.ai-voice-dot').forEach(d => {
+                const isMatch = d === dot;
+                d.classList.toggle('active', isMatch);
+                d.setAttribute('aria-checked', isMatch ? 'true' : 'false');
+            });
+        });
+        container.appendChild(dot);
+    });
+}
+
 
 function updateFileBadgeDefaultLabels() {
     const defaultLabelText = globalBadgeVariant === 'auto'
@@ -613,23 +658,31 @@ function updateFileBadgeDefaultLabels() {
 function setGlobalBadgeVariant(variant) {
     globalBadgeVariant = variant;
     const pillGroup = document.getElementById('globalBadgePillGroup');
-    const resetBtn = document.getElementById('resetGlobalBadgeBtn');
     const statusBadge = document.getElementById('globalBadgeStatusBadge');
+    const aiColorRow = document.getElementById('globalAiVoiceColors');
 
     if (pillGroup) {
         pillGroup.querySelectorAll('.badge-variant-pill').forEach(p => {
-            const isMatch = p.getAttribute('data-variant') === variant;
+            const pv = p.getAttribute('data-variant');
+            const isMatch = pv === variant || (pv === 'aiVoiceOver' && isAiVoiceVariant(variant));
             p.classList.toggle('active', isMatch);
             p.setAttribute('aria-checked', isMatch ? 'true' : 'false');
         });
     }
 
-    if (statusBadge) {
-        statusBadge.textContent = BADGE_VARIANT_LABELS[variant] || variant;
+    if (aiColorRow) {
+        aiColorRow.classList.toggle('hidden', !isAiVoiceVariant(variant));
+        if (isAiVoiceVariant(variant)) {
+            aiColorRow.querySelectorAll('.ai-voice-dot').forEach(d => {
+                const isMatch = d.getAttribute('data-variant') === variant;
+                d.classList.toggle('active', isMatch);
+                d.setAttribute('aria-checked', isMatch ? 'true' : 'false');
+            });
+        }
     }
 
-    if (resetBtn) {
-        resetBtn.classList.toggle('hidden', variant === 'auto');
+    if (statusBadge) {
+        statusBadge.textContent = BADGE_VARIANT_LABELS[variant] || variant;
     }
 
     updateFileBadgeDefaultLabels();
@@ -637,22 +690,29 @@ function setGlobalBadgeVariant(variant) {
 
 function setupGlobalBadgeListeners() {
     const pillGroup = document.getElementById('globalBadgePillGroup');
-    const resetBtn = document.getElementById('resetGlobalBadgeBtn');
+    const aiColorDots = document.getElementById('globalAiVoiceColors');
+
+    if (aiColorDots) {
+        buildAiVoiceColorDots(
+            aiColorDots,
+            () => (isAiVoiceVariant(globalBadgeVariant) ? globalBadgeVariant : 'aiVoiceOver'),
+            (variant) => setGlobalBadgeVariant(variant)
+        );
+    }
 
     if (pillGroup) {
         pillGroup.querySelectorAll('.badge-variant-pill').forEach(pill => {
             pill.addEventListener('click', (e) => {
                 e.preventDefault();
                 const variant = pill.getAttribute('data-variant');
-                if (variant) setGlobalBadgeVariant(variant);
+                if (!variant) return;
+                // Re-selecting the AI Voice Over pill keeps any previously chosen colour, else defaults to white
+                if (variant === 'aiVoiceOver') {
+                    setGlobalBadgeVariant(isAiVoiceVariant(globalBadgeVariant) ? globalBadgeVariant : 'aiVoiceOver');
+                } else {
+                    setGlobalBadgeVariant(variant);
+                }
             });
-        });
-    }
-
-    if (resetBtn) {
-        resetBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            setGlobalBadgeVariant('auto');
         });
     }
 }
@@ -696,7 +756,27 @@ function createFileBadgeElement(fileName, index) {
         <option value="aiVoiceOver">AI Voice Over</option>
     `;
 
-    select.value = currentVal;
+    select.value = isAiVoiceVariant(currentVal) ? 'aiVoiceOver' : currentVal;
+
+    // Per-file AI Voice Over text-colour dots (shown only when AI Voice Over is selected for this file)
+    const aiColorRow = document.createElement('div');
+    aiColorRow.className = 'ai-voice-color-row file-ai-voice-row';
+    aiColorRow.classList.toggle('hidden', !isAiVoiceVariant(currentVal));
+    const aiColorCaption = document.createElement('span');
+    aiColorCaption.className = 'ai-voice-color-caption';
+    aiColorCaption.textContent = 'Text colour:';
+    const aiColorDots = document.createElement('div');
+    aiColorDots.className = 'ai-voice-color-dots';
+    buildAiVoiceColorDots(
+        aiColorDots,
+        () => (isAiVoiceVariant(perFileBadgeState[fileName]) ? perFileBadgeState[fileName] : 'aiVoiceOver'),
+        (variant) => {
+            perFileBadgeState[fileName] = variant;
+            select.classList.add('is-custom');
+        }
+    );
+    aiColorRow.appendChild(aiColorCaption);
+    aiColorRow.appendChild(aiColorDots);
 
     select.onchange = (e) => {
         e.stopPropagation();
@@ -704,9 +784,24 @@ function createFileBadgeElement(fileName, index) {
         if (newVal === 'inherit') {
             delete perFileBadgeState[fileName];
             select.classList.remove('is-custom');
+            aiColorRow.classList.add('hidden');
+        } else if (newVal === 'aiVoiceOver') {
+            // Default to white and reveal the colour dots
+            perFileBadgeState[fileName] = 'aiVoiceOver';
+            select.classList.add('is-custom');
+            aiColorRow.classList.remove('hidden');
+            buildAiVoiceColorDots(
+                aiColorDots,
+                () => (isAiVoiceVariant(perFileBadgeState[fileName]) ? perFileBadgeState[fileName] : 'aiVoiceOver'),
+                (variant) => {
+                    perFileBadgeState[fileName] = variant;
+                    select.classList.add('is-custom');
+                }
+            );
         } else {
             perFileBadgeState[fileName] = newVal;
             select.classList.add('is-custom');
+            aiColorRow.classList.add('hidden');
         }
     };
 
@@ -724,6 +819,7 @@ function createFileBadgeElement(fileName, index) {
     row.appendChild(label);
     row.appendChild(selectWrap);
     container.appendChild(row);
+    container.appendChild(aiColorRow);
 
     return container;
 }

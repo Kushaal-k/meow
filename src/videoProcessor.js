@@ -256,8 +256,8 @@ async function processVideo(
     const baseDim = Math.min(width, height);
     let targetBadgeHeight = Math.max(20, Math.round(baseDim * 0.046));
 
-    // AI Voice Over is a fixed single-variant overlay rendered smaller than the color badges
-    if (chosenScheme === 'aiVoiceOver') {
+    // AI Voice Over is a fixed overlay rendered smaller than the color badges
+    if (chosenScheme && chosenScheme.startsWith('aiVoiceOver')) {
         targetBadgeHeight = Math.round(targetBadgeHeight * 0.58);
     }
 
@@ -325,7 +325,7 @@ async function processVideo(
     }
 
     // AI Voice Over only fades in/out at its final position, with no slide-in/slide-out motion
-    if (chosenScheme === 'aiVoiceOver') {
+    if (chosenScheme && chosenScheme.startsWith('aiVoiceOver')) {
         xExpr = restX;
     }
 

@@ -224,13 +224,6 @@
                                     <span class="badge-selection-badge" id="globalBadgeStatusBadge">Auto</span>
                                 </div>
                             </div>
-                            <button id="resetGlobalBadgeBtn" class="badge-reset-btn hidden" type="button" title="Reset to Auto (Smart Detect)">
-                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-                                    <path d="M3 3v5h5"></path>
-                                </svg>
-                                <span>Reset to Auto</span>
-                            </button>
                         </div>
                         <div class="badge-pill-group" id="globalBadgePillGroup" role="radiogroup" aria-label="Default badge variant">
                             <button type="button" class="badge-variant-pill active" data-variant="auto" role="radio" aria-checked="true" title="Auto">
@@ -252,9 +245,11 @@
                                 <span class="badge-pill-indicator dot-dark-green"></span>
                                 <span class="badge-pill-label">Emerald Green Badge</span>
                             </button>
+                            <span class="badge-pill-divider" aria-hidden="true"></span>
                             <button type="button" class="badge-variant-pill" data-variant="aiVoiceOver" role="radio" aria-checked="false" title="AI Voice Over">
                                 <span class="badge-pill-label">AI Voice Over</span>
                             </button>
+                            <div class="ai-voice-color-dots global-ai-dots hidden" id="globalAiVoiceColors" role="radiogroup" aria-label="AI Voice Over text colour"></div>
                         </div>
                     </div>
 

@@ -39,8 +39,11 @@ const BADGE_FILES = {
     electricGreen: 'electric_green_bg_badge.png',
     dark: 'dark_bg_badge.png',
     light: 'light_bg_badge.png',
-    // Single fixed overlay with no color variants; applied as-is when explicitly selected
-    aiVoiceOver: 'AI_Voice_Overlay.png'
+    // Fixed overlay applied as-is when explicitly selected; colour variants differ only in text colour
+    aiVoiceOver: 'AI_Voice_Overlay.png',
+    aiVoiceOverBlack: 'AI_Voice_Overlay_black.png',
+    aiVoiceOverDarkGreen: 'AI_Voice_Overlay_dark_green.png',
+    aiVoiceOverElectricGreen: 'AI_Voice_Overlay_electric_green.png'
 };
 
 const BADGES = {
@@ -48,7 +51,10 @@ const BADGES = {
     electricGreen: resolveBadgePath(BADGE_FILES.electricGreen),
     dark: resolveBadgePath(BADGE_FILES.dark),
     light: resolveBadgePath(BADGE_FILES.light),
-    aiVoiceOver: resolveBadgePath(BADGE_FILES.aiVoiceOver)
+    aiVoiceOver: resolveBadgePath(BADGE_FILES.aiVoiceOver),
+    aiVoiceOverBlack: resolveBadgePath(BADGE_FILES.aiVoiceOverBlack),
+    aiVoiceOverDarkGreen: resolveBadgePath(BADGE_FILES.aiVoiceOverDarkGreen),
+    aiVoiceOverElectricGreen: resolveBadgePath(BADGE_FILES.aiVoiceOverElectricGreen)
 };
 
 function getBadgePath(badgeType) {
@@ -245,8 +251,8 @@ async function processImage(inputPath, outputPath, badgeOverride = null) {
     // Ratio of trimmed badge emblem is 113 x 90 = 1.2555
     let targetBadgeHeight = Math.max(14, Math.min(Math.round(metadata.height * 0.22), Math.round(baseDim * 0.038)));
 
-    // AI Voice Over is a fixed single-variant overlay rendered smaller than the color badges
-    if (selectedBadge === 'aiVoiceOver') {
+    // AI Voice Over is a fixed overlay rendered smaller than the color badges
+    if (selectedBadge && selectedBadge.startsWith('aiVoiceOver')) {
         targetBadgeHeight = Math.round(targetBadgeHeight * 0.58);
     }
 

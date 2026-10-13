@@ -926,33 +926,6 @@ input[type="number"] {
     color: var(--secondary);
 }
 
-.badge-reset-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 11.5px;
-    font-weight: 600;
-    padding: 4px 10px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--surface-hover);
-    color: var(--muted);
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-[data-theme="dark"] .badge-reset-btn {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.1);
-    color: var(--muted-light);
-}
-
-.badge-reset-btn:hover {
-    color: var(--text-heading);
-    border-color: var(--secondary);
-    background: rgba(120, 250, 174, 0.12);
-}
-
 .badge-selection-desc {
     font-size: 11.5px;
     color: var(--muted);
@@ -964,6 +937,19 @@ input[type="number"] {
     display: flex;
     flex-wrap: wrap;
     gap: 7px;
+}
+
+/* Dotted horizontal separator between the auto-detected badges and the AI Voice Over pill */
+.badge-pill-divider {
+    flex-basis: 100%;
+    width: 100%;
+    height: 0;
+    margin: 5px 0;
+    border-top: 1px solid #77777744;
+}
+
+[data-theme="dark"] .badge-pill-divider {
+    border-top-color: #78faae44;
 }
 
 .badge-variant-pill {
@@ -1036,6 +1022,89 @@ input[type="number"] {
 .badge-pill-indicator.dot-electric-green {
     background: #78faae;
     border: 1.5px solid #0e3a2f;
+}
+
+/* AI Voice Over text-colour dots */
+.ai-voice-color-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.ai-voice-color-row.hidden {
+    display: none;
+}
+
+.ai-voice-color-caption {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.ai-voice-color-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ai-voice-color-dots.hidden {
+    display: none;
+}
+
+/* Global default-badge dots: inline next to the AI Voice Over pill with a staggered springy reveal */
+.ai-voice-color-dots.global-ai-dots {
+    margin-left: 2px;
+    padding-left: 8px;
+    border-left: 1px solid var(--border);
+}
+
+.global-ai-dots .ai-voice-dot {
+    animation: aiDotSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+
+.global-ai-dots .ai-voice-dot:nth-child(1) { animation-delay: 0.03s; }
+.global-ai-dots .ai-voice-dot:nth-child(2) { animation-delay: 0.1s; }
+.global-ai-dots .ai-voice-dot:nth-child(3) { animation-delay: 0.17s; }
+.global-ai-dots .ai-voice-dot:nth-child(4) { animation-delay: 0.24s; }
+
+@keyframes aiDotSpring {
+    0% {
+        opacity: 0;
+        transform: translateX(-14px) scale(0.2);
+    }
+    60% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}
+
+.ai-voice-dot {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--dot-color, #ffffff);
+    border: 2px solid var(--border);
+    cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+    transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ai-voice-dot:hover {
+    transform: scale(1.12);
+}
+
+.ai-voice-dot.active {
+    border-color: var(--secondary);
+    box-shadow: 0 0 0 2px var(--secondary);
+}
+
+.file-ai-voice-row {
+    margin-top: 8px;
 }
 
 /* ============================================================
